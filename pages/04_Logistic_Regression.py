@@ -21,7 +21,7 @@ from sklearn.metrics import (
     balanced_accuracy_score,
     confusion_matrix,
     roc_auc_score,
-    roc_curve
+    roc_curve,
 )
 
 from components.styles import apply_global_styles
@@ -29,7 +29,7 @@ from components.footer import show_footer
 from components.icons import (
     page_title,
     section_title,
-    icon_card
+    icon_card,
 )
 
 from core.model_loader import load_logistic_model
@@ -42,7 +42,7 @@ from core.model_loader import load_logistic_model
 st.set_page_config(
     page_title="Logistic Regression",
     page_icon="📊",
-    layout="wide"
+    layout="wide",
 )
 
 apply_global_styles()
@@ -79,7 +79,7 @@ features = [
     "attendance_percentage",
     "assignment_completion_rate",
     "study_hours_per_day",
-    "practice_tests_completed"
+    "practice_tests_completed",
 ]
 
 target = "pass_status"
@@ -92,20 +92,33 @@ target = "pass_status"
 @st.cache_data
 def prepare_classification_results():
 
+    # --------------------------------------------------------
+    # INPUT FEATURES AND TARGET
+    # --------------------------------------------------------
+
     X = df[features].copy()
 
-    y = df[target].map({
-        "Pass": 1,
-        "Fail": 0
-    })
+    # Keep labels as text so they match the saved model.
+    #
+    # Saved model classes:
+    # "Fail" and "Pass"
+    #
+    # Do NOT map these to 0 and 1 here.
+    y = df[target].astype(str)
+
+
+    # --------------------------------------------------------
+    # TRAIN / TEST SPLIT
+    # --------------------------------------------------------
 
     X_train, X_test, y_train, y_test = train_test_split(
         X,
         y,
         test_size=0.20,
         random_state=42,
-        stratify=y
+        stratify=y,
     )
+
 
     # --------------------------------------------------------
     # SAVED BALANCED LOGISTIC REGRESSION MODEL
@@ -117,9 +130,29 @@ def prepare_classification_results():
         X_test
     )
 
-    y_prob_balanced = balanced_model.predict_proba(
+    probability_matrix = balanced_model.predict_proba(
         X_test
-    )[:, 1]
+    )
+
+
+    # --------------------------------------------------------
+    # IDENTIFY THE "PASS" PROBABILITY COLUMN
+    # --------------------------------------------------------
+
+    balanced_classes = list(
+        balanced_model.named_steps[
+            "model"
+        ].classes_
+    )
+
+    pass_index = balanced_classes.index(
+        "Pass"
+    )
+
+    y_prob_balanced = probability_matrix[
+        :,
+        pass_index
+    ]
 
 
     # --------------------------------------------------------
@@ -134,25 +167,25 @@ def prepare_classification_results():
                     "imputer",
                     SimpleImputer(
                         strategy="median"
-                    )
+                    ),
                 ),
                 (
                     "scaler",
-                    StandardScaler()
-                )
-            ])
+                    StandardScaler(),
+                ),
+            ]),
         ),
         (
             "model",
             LogisticRegression(
                 max_iter=1000
-            )
-        )
+            ),
+        ),
     ])
 
     standard_model.fit(
         X_train,
-        y_train
+        y_train,
     )
 
     y_pred_standard = standard_model.predict(
@@ -170,7 +203,7 @@ def prepare_classification_results():
 
     dummy_model.fit(
         X_train,
-        y_train
+        y_train,
     )
 
     y_pred_dummy = dummy_model.predict(
@@ -184,92 +217,129 @@ def prepare_classification_results():
 
     def get_metrics(
         y_true,
-        y_pred
+        y_pred,
     ):
 
         return {
             "Accuracy":
                 accuracy_score(
                     y_true,
-                    y_pred
+                    y_pred,
                 ),
 
             "Precision":
                 precision_score(
                     y_true,
-                    y_pred
+                    y_pred,
+                    pos_label="Pass",
+                    zero_division=0,
                 ),
 
             "Recall":
                 recall_score(
                     y_true,
-                    y_pred
+                    y_pred,
+                    pos_label="Pass",
+                    zero_division=0,
                 ),
 
             "F1 Score":
                 f1_score(
                     y_true,
-                    y_pred
+                    y_pred,
+                    pos_label="Pass",
+                    zero_division=0,
                 ),
 
             "Balanced Accuracy":
                 balanced_accuracy_score(
                     y_true,
-                    y_pred
-                )
+                    y_pred,
+                ),
         }
 
 
+    # --------------------------------------------------------
+    # MODEL METRICS
+    # --------------------------------------------------------
+
     balanced_metrics = get_metrics(
         y_test,
-        y_pred_balanced
+        y_pred_balanced,
     )
 
     standard_metrics = get_metrics(
         y_test,
-        y_pred_standard
+        y_pred_standard,
     )
 
     dummy_metrics = get_metrics(
         y_test,
-        y_pred_dummy
+        y_pred_dummy,
     )
 
+
+    # --------------------------------------------------------
+    # CONFUSION MATRIX
+    # --------------------------------------------------------
 
     cm_balanced = confusion_matrix(
         y_test,
-        y_pred_balanced
+        y_pred_balanced,
+        labels=[
+            "Fail",
+            "Pass",
+        ],
     )
 
+
+    # --------------------------------------------------------
+    # ROC / AUC
+    # --------------------------------------------------------
+    #
+    # ROC functions need a binary target.
+    # Convert ONLY for ROC/AUC.
+    # All other classification metrics continue using
+    # "Fail" / "Pass" labels.
+    # --------------------------------------------------------
+
+    y_test_binary = (
+        y_test == "Pass"
+    ).astype(int)
 
     auc = roc_auc_score(
-        y_test,
-        y_prob_balanced
+        y_test_binary,
+        y_prob_balanced,
     )
-
 
     fpr, tpr, thresholds = roc_curve(
-        y_test,
-        y_prob_balanced
+        y_test_binary,
+        y_prob_balanced,
     )
 
+
+    # --------------------------------------------------------
+    # MODEL COMPARISON TABLE
+    # --------------------------------------------------------
 
     comparison_df = pd.DataFrame({
         "Model": [
             "Dummy Baseline",
             "Standard Logistic Regression",
-            "Balanced Logistic Regression"
+            "Balanced Logistic Regression",
         ],
+
         "Accuracy": [
             dummy_metrics["Accuracy"],
             standard_metrics["Accuracy"],
-            balanced_metrics["Accuracy"]
+            balanced_metrics["Accuracy"],
         ],
+
         "Balanced Accuracy": [
             dummy_metrics["Balanced Accuracy"],
             standard_metrics["Balanced Accuracy"],
-            balanced_metrics["Balanced Accuracy"]
-        ]
+            balanced_metrics["Balanced Accuracy"],
+        ],
     })
 
 
@@ -283,7 +353,7 @@ def prepare_classification_results():
         tpr,
         comparison_df,
         len(X_train),
-        len(X_test)
+        len(X_test),
     )
 
 
@@ -297,7 +367,7 @@ def prepare_classification_results():
     tpr,
     comparison_df,
     train_n,
-    test_n
+    test_n,
 ) = prepare_classification_results()
 
 
@@ -309,7 +379,7 @@ page_title(
     "target",
     "Logistic Regression",
     "Predict Pass or Fail using the same six pre-exam "
-    "student-performance variables."
+    "student-performance variables.",
 )
 
 
@@ -319,7 +389,7 @@ page_title(
 
 section_title(
     "database",
-    "Model Overview"
+    "Model Overview",
 )
 
 
@@ -328,17 +398,17 @@ o1, o2, o3, o4 = st.columns(4)
 
 o1.metric(
     "Training Records",
-    f"{train_n:,}"
+    f"{train_n:,}",
 )
 
 o2.metric(
     "Testing Records",
-    f"{test_n:,}"
+    f"{test_n:,}",
 )
 
 o3.metric(
     "Input Features",
-    len(features)
+    len(features),
 )
 
 with o4:
@@ -358,7 +428,7 @@ with o4:
 
 section_title(
     "chart",
-    "Class Distribution"
+    "Class Distribution",
 )
 
 
@@ -371,14 +441,14 @@ class_counts = (
 pass_count = int(
     class_counts.get(
         "Pass",
-        0
+        0,
     )
 )
 
 fail_count = int(
     class_counts.get(
         "Fail",
-        0
+        0,
     )
 )
 
@@ -395,13 +465,13 @@ with class_col1:
     m1.metric(
         "Pass",
         f"{pass_count:,}",
-        f"{pass_count / len(df) * 100:.1f}%"
+        f"{pass_count / len(df) * 100:.1f}%",
     )
 
     m2.metric(
         "Fail",
         f"{fail_count:,}",
-        f"{fail_count / len(df) * 100:.1f}%"
+        f"{fail_count / len(df) * 100:.1f}%",
     )
 
     st.caption(
@@ -415,12 +485,12 @@ with class_col2:
     class_df = pd.DataFrame({
         "Status": [
             "Pass",
-            "Fail"
+            "Fail",
         ],
         "Students": [
             pass_count,
-            fail_count
-        ]
+            fail_count,
+        ],
     })
 
 
@@ -428,13 +498,13 @@ with class_col2:
         class_df,
         names="Status",
         values="Students",
-        hole=0.62
+        hole=0.62,
     )
 
 
     fig_class.update_traces(
         textinfo="percent+label",
-        textposition="inside"
+        textposition="inside",
     )
 
 
@@ -444,18 +514,18 @@ with class_col2:
             l=10,
             r=10,
             t=5,
-            b=5
+            b=5,
         ),
-        showlegend=False
+        showlegend=False,
     )
 
 
     st.plotly_chart(
         fig_class,
-        use_container_width=True,
+        width="stretch",
         config={
             "displayModeBar": False
-        }
+        },
     )
 
 
@@ -472,7 +542,7 @@ st.info(
 
 section_title(
     "target",
-    "Balanced Logistic Regression Performance"
+    "Balanced Logistic Regression Performance",
 )
 
 
@@ -484,7 +554,7 @@ metric_names = [
     "Precision",
     "Recall",
     "F1 Score",
-    "Balanced Accuracy"
+    "Balanced Accuracy",
 ]
 
 
@@ -502,13 +572,13 @@ metric_descriptions = {
         "Balance between precision and recall.",
 
     "Balanced Accuracy":
-        "Average performance across both classes."
+        "Average performance across both classes.",
 }
 
 
 for col, metric_name in zip(
     metric_cols,
-    metric_names
+    metric_names,
 ):
 
     with col:
@@ -519,7 +589,7 @@ for col, metric_name in zip(
 
             st.metric(
                 metric_name,
-                f"{balanced_metrics[metric_name] * 100:.1f}%"
+                f"{balanced_metrics[metric_name] * 100:.1f}%",
             )
 
             st.caption(
@@ -544,7 +614,7 @@ with summary1:
         "check",
         "Overall Accuracy",
         f"{balanced_metrics['Accuracy'] * 100:.1f}% "
-        "of test predictions are correct."
+        "of test predictions are correct.",
     )
 
 
@@ -554,7 +624,7 @@ with summary2:
         "scale",
         "Balanced Accuracy",
         f"{balanced_metrics['Balanced Accuracy'] * 100:.1f}% "
-        "when both classes are weighted equally."
+        "when both classes are weighted equally.",
     )
 
 
@@ -564,7 +634,7 @@ with summary3:
         "target",
         "ROC AUC",
         f"AUC = {auc:.3f}, indicating useful separation "
-        "between Pass and Fail students."
+        "between Pass and Fail students.",
     )
 
 
@@ -574,7 +644,7 @@ with summary3:
 
 section_title(
     "chart",
-    "Confusion Matrix"
+    "Confusion Matrix",
 )
 
 
@@ -582,12 +652,12 @@ cm_df = pd.DataFrame(
     cm_balanced,
     index=[
         "Actual Fail",
-        "Actual Pass"
+        "Actual Pass",
     ],
     columns=[
         "Predicted Fail",
-        "Predicted Pass"
-    ]
+        "Predicted Pass",
+    ],
 )
 
 
@@ -595,7 +665,7 @@ fig_cm = px.imshow(
     cm_df,
     text_auto=True,
     aspect="auto",
-    color_continuous_scale="Blues"
+    color_continuous_scale="Blues",
 )
 
 
@@ -605,20 +675,20 @@ fig_cm.update_layout(
         l=20,
         r=20,
         t=10,
-        b=20
+        b=20,
     ),
     coloraxis_colorbar=dict(
         title="Students"
-    )
+    ),
 )
 
 
 st.plotly_chart(
     fig_cm,
-    use_container_width=True,
+    width="stretch",
     config={
         "displayModeBar": False
-    }
+    },
 )
 
 
@@ -634,22 +704,22 @@ conf1, conf2, conf3, conf4 = (
 
 conf1.metric(
     "Correct Fails",
-    f"{tn:,}"
+    f"{tn:,}",
 )
 
 conf2.metric(
     "Fail → Pass",
-    f"{fp:,}"
+    f"{fp:,}",
 )
 
 conf3.metric(
     "Pass → Fail",
-    f"{fn:,}"
+    f"{fn:,}",
 )
 
 conf4.metric(
     "Correct Passes",
-    f"{tp:,}"
+    f"{tp:,}",
 )
 
 
@@ -665,7 +735,7 @@ st.caption(
 
 section_title(
     "scale",
-    "Classification Model Comparison"
+    "Classification Model Comparison",
 )
 
 
@@ -715,8 +785,8 @@ display_comparison[
 
 st.dataframe(
     display_comparison,
-    use_container_width=True,
-    hide_index=True
+    width="stretch",
+    hide_index=True,
 )
 
 
@@ -724,10 +794,10 @@ compare_long = comparison_df.melt(
     id_vars="Model",
     value_vars=[
         "Accuracy",
-        "Balanced Accuracy"
+        "Balanced Accuracy",
     ],
     var_name="Metric",
-    value_name="Score"
+    value_name="Score",
 )
 
 
@@ -736,7 +806,7 @@ fig_compare = px.bar(
     x="Model",
     y="Score",
     color="Metric",
-    barmode="group"
+    barmode="group",
 )
 
 
@@ -746,21 +816,21 @@ fig_compare.update_layout(
         l=20,
         r=20,
         t=10,
-        b=20
+        b=20,
     ),
     yaxis_title="Score",
     xaxis_title="",
     yaxis_tickformat=".0%",
-    legend_title=""
+    legend_title="",
 )
 
 
 st.plotly_chart(
     fig_compare,
-    use_container_width=True,
+    width="stretch",
     config={
         "displayModeBar": False
-    }
+    },
 )
 
 
@@ -777,7 +847,7 @@ st.warning(
 
 section_title(
     "chart",
-    "Balanced Accuracy Ranking"
+    "Balanced Accuracy Ranking",
 )
 
 
@@ -785,12 +855,12 @@ ranking_df = (
     comparison_df[
         [
             "Model",
-            "Balanced Accuracy"
+            "Balanced Accuracy",
         ]
     ]
     .sort_values(
         "Balanced Accuracy",
-        ascending=True
+        ascending=True,
     )
 )
 
@@ -800,13 +870,13 @@ fig_rank = px.bar(
     x="Balanced Accuracy",
     y="Model",
     orientation="h",
-    text="Balanced Accuracy"
+    text="Balanced Accuracy",
 )
 
 
 fig_rank.update_traces(
     texttemplate="%{text:.1%}",
-    textposition="outside"
+    textposition="outside",
 )
 
 
@@ -816,21 +886,21 @@ fig_rank.update_layout(
         l=20,
         r=70,
         t=10,
-        b=20
+        b=20,
     ),
     xaxis_title="Balanced Accuracy",
     yaxis_title="",
     xaxis_tickformat=".0%",
-    showlegend=False
+    showlegend=False,
 )
 
 
 st.plotly_chart(
     fig_rank,
-    use_container_width=True,
+    width="stretch",
     config={
         "displayModeBar": False
-    }
+    },
 )
 
 
@@ -840,20 +910,20 @@ st.plotly_chart(
 
 section_title(
     "trending",
-    "ROC Curve"
+    "ROC Curve",
 )
 
 
 roc_df = pd.DataFrame({
     "False Positive Rate": fpr,
-    "True Positive Rate": tpr
+    "True Positive Rate": tpr,
 })
 
 
 fig_roc = px.line(
     roc_df,
     x="False Positive Rate",
-    y="True Positive Rate"
+    y="True Positive Rate",
 )
 
 
@@ -865,8 +935,8 @@ fig_roc.add_shape(
     y1=1,
     line=dict(
         dash="dash",
-        width=2
-    )
+        width=2,
+    ),
 )
 
 
@@ -876,34 +946,34 @@ fig_roc.update_layout(
         l=20,
         r=20,
         t=10,
-        b=20
+        b=20,
     ),
     xaxis_title="False Positive Rate",
-    yaxis_title="True Positive Rate"
+    yaxis_title="True Positive Rate",
 )
 
 
 fig_roc.update_xaxes(
     range=[
         0,
-        1
+        1,
     ]
 )
 
 fig_roc.update_yaxes(
     range=[
         0,
-        1
+        1,
     ]
 )
 
 
 st.plotly_chart(
     fig_roc,
-    use_container_width=True,
+    width="stretch",
     config={
         "displayModeBar": False
-    }
+    },
 )
 
 
@@ -919,7 +989,7 @@ st.caption(
 
 section_title(
     "brain",
-    "Model Interpretation"
+    "Model Interpretation",
 )
 
 
@@ -935,7 +1005,7 @@ with interpret1:
         "Pass Predictions",
         f"Precision is "
         f"{balanced_metrics['Precision'] * 100:.1f}%, "
-        "so predicted Pass outcomes are usually correct."
+        "so predicted Pass outcomes are usually correct.",
     )
 
 
@@ -946,7 +1016,7 @@ with interpret2:
         "Pass Detection",
         f"Recall is "
         f"{balanced_metrics['Recall'] * 100:.1f}%, "
-        "showing how many actual Pass students are identified."
+        "showing how many actual Pass students are identified.",
     )
 
 
@@ -957,7 +1027,7 @@ with interpret3:
         "Class Balance",
         f"Balanced Accuracy is "
         f"{balanced_metrics['Balanced Accuracy'] * 100:.1f}%, "
-        "reflecting performance across both classes."
+        "reflecting performance across both classes.",
     )
 
 
@@ -967,7 +1037,7 @@ with interpret3:
 
 section_title(
     "scale",
-    "Why Use the Balanced Model?"
+    "Why Use the Balanced Model?",
 )
 
 
@@ -980,7 +1050,7 @@ with reason1:
         "check",
         "Minority-Class Detection",
         "Class weighting increases attention to failing students, "
-        "who form the smaller outcome group."
+        "who form the smaller outcome group.",
     )
 
 
@@ -990,7 +1060,7 @@ with reason2:
         "scale",
         "More Balanced Evaluation",
         "The model sacrifices some ordinary accuracy in exchange "
-        "for stronger performance across both classes."
+        "for stronger performance across both classes.",
     )
 
 
@@ -1007,7 +1077,7 @@ st.success(
 
 section_title(
     "check",
-    "Conclusion"
+    "Conclusion",
 )
 
 
