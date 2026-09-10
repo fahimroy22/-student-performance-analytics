@@ -6,8 +6,14 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-from components.styles import apply_global_styles
+from components.styles import (
+    apply_global_styles,
+    get_plotly_template,
+    get_theme_colors,
+)
+
 from components.footer import show_footer
+
 from components.icons import (
     page_title,
     section_title,
@@ -26,6 +32,139 @@ st.set_page_config(
 )
 
 apply_global_styles()
+
+
+# ------------------------------------------------------------
+# THEME SETTINGS
+# ------------------------------------------------------------
+
+plotly_template = get_plotly_template()
+theme_colors = get_theme_colors()
+
+chart_background = theme_colors["background"]
+surface = theme_colors["surface"]
+chart_text = theme_colors["text"]
+chart_muted = theme_colors["muted"]
+chart_border = theme_colors["border"]
+accent = theme_colors["accent"]
+
+
+# ------------------------------------------------------------
+# COMMON PLOTLY STYLE
+# ------------------------------------------------------------
+
+def style_chart(fig):
+
+    fig.update_layout(
+        template=plotly_template,
+        paper_bgcolor=chart_background,
+        plot_bgcolor=chart_background,
+        font=dict(
+            color=chart_text
+        ),
+    )
+
+    fig.update_xaxes(
+        color=chart_text,
+        gridcolor=chart_border,
+        zerolinecolor=chart_border
+    )
+
+    fig.update_yaxes(
+        color=chart_text,
+        gridcolor=chart_border,
+        zerolinecolor=chart_border
+    )
+
+    return fig
+
+
+# ------------------------------------------------------------
+# THEME-AWARE HTML TABLE
+# ------------------------------------------------------------
+
+def show_theme_table(
+    table_df,
+    max_height=None
+):
+
+    clean_df = (
+        table_df
+        .copy()
+        .fillna("—")
+    )
+
+    table_html = clean_df.to_html(
+        index=False,
+        escape=True,
+        border=0,
+        classes="comparison-table"
+    )
+
+    if max_height is not None:
+
+        container_style = (
+            f"max-height:{max_height}px;"
+            "overflow:auto;"
+        )
+
+    else:
+
+        container_style = (
+            "overflow-x:auto;"
+        )
+
+    html = f"""
+    <style>
+
+    .comparison-table-container {{
+        {container_style}
+        border:1px solid {chart_border};
+        border-radius:10px;
+        background:{surface};
+        margin-bottom:14px;
+    }}
+
+    .comparison-table {{
+        width:100%;
+        border-collapse:collapse;
+        font-size:13px;
+        color:{chart_text};
+        background:{surface};
+    }}
+
+    .comparison-table thead th {{
+        text-align:left;
+        padding:10px 11px;
+        font-weight:600;
+        color:{chart_muted};
+        background:{surface};
+        border-bottom:1px solid {chart_border};
+        white-space:nowrap;
+    }}
+
+    .comparison-table tbody td {{
+        padding:9px 11px;
+        color:{chart_text};
+        background:{surface};
+        border-bottom:1px solid {chart_border};
+        white-space:nowrap;
+    }}
+
+    .comparison-table tbody tr:last-child td {{
+        border-bottom:none;
+    }}
+
+    </style>
+
+    <div class="comparison-table-container">
+        {table_html}
+    </div>
+    """
+
+    st.html(
+        html
+    )
 
 
 # ------------------------------------------------------------
@@ -102,7 +241,9 @@ r1, r2, r3 = st.columns(3)
 
 with r1:
 
-    with st.container(border=True):
+    with st.container(
+        border=True
+    ):
 
         st.metric(
             "MAE",
@@ -116,7 +257,9 @@ with r1:
 
 with r2:
 
-    with st.container(border=True):
+    with st.container(
+        border=True
+    ):
 
         st.metric(
             "RMSE",
@@ -130,7 +273,9 @@ with r2:
 
 with r3:
 
-    with st.container(border=True):
+    with st.container(
+        border=True
+    ):
 
         st.metric(
             "R²",
@@ -167,16 +312,18 @@ with reg_col1:
     )
 
 
-    regression_error_df = pd.DataFrame({
-        "Metric": [
-            "MAE",
-            "RMSE"
-        ],
-        "Value": [
-            9.38,
-            11.76
-        ]
-    })
+    regression_error_df = pd.DataFrame(
+        {
+            "Metric": [
+                "MAE",
+                "RMSE"
+            ],
+            "Value": [
+                9.38,
+                11.76
+            ]
+        }
+    )
 
 
     fig_reg_error = px.bar(
@@ -188,6 +335,7 @@ with reg_col1:
 
 
     fig_reg_error.update_traces(
+        marker_color=accent,
         texttemplate="%{text:.2f}",
         textposition="outside"
     )
@@ -195,21 +343,31 @@ with reg_col1:
 
     fig_reg_error.update_layout(
         height=330,
+
         margin=dict(
             l=20,
             r=20,
             t=10,
             b=20
         ),
+
         yaxis_title="Exam-Score Points",
         xaxis_title="Metric",
+
         showlegend=False
+    )
+
+
+    style_chart(
+        fig_reg_error
     )
 
 
     st.plotly_chart(
         fig_reg_error,
-        use_container_width=True,
+        width="stretch",
+        theme=None,
+
         config={
             "displayModeBar": False
         }
@@ -233,16 +391,18 @@ with reg_col2:
     )
 
 
-    variation_df = pd.DataFrame({
-        "Component": [
-            "Explained",
-            "Unexplained"
-        ],
-        "Percentage": [
-            44.4,
-            55.6
-        ]
-    })
+    variation_df = pd.DataFrame(
+        {
+            "Component": [
+                "Explained",
+                "Unexplained"
+            ],
+            "Percentage": [
+                44.4,
+                55.6
+            ]
+        }
+    )
 
 
     fig_variation = px.pie(
@@ -260,20 +420,33 @@ with reg_col2:
 
 
     fig_variation.update_layout(
+        template=plotly_template,
+
         height=330,
+
         margin=dict(
             l=10,
             r=10,
             t=10,
             b=10
         ),
-        showlegend=False
+
+        showlegend=False,
+
+        paper_bgcolor=chart_background,
+        plot_bgcolor=chart_background,
+
+        font=dict(
+            color=chart_text
+        )
     )
 
 
     st.plotly_chart(
         fig_variation,
-        use_container_width=True,
+        width="stretch",
+        theme=None,
+
         config={
             "displayModeBar": False
         }
@@ -308,7 +481,10 @@ metric_names = [
 metric_cols = st.columns(5)
 
 
-for col, (name, value) in zip(
+for col, (
+    name,
+    value
+) in zip(
     metric_cols,
     metric_names
 ):
@@ -341,22 +517,25 @@ section_title(
 )
 
 
-classification_metrics_df = pd.DataFrame({
-    "Metric": [
-        "Accuracy",
-        "Precision",
-        "Recall",
-        "F1 Score",
-        "Balanced Accuracy"
-    ],
-    "Score": [
-        72.5,
-        90.6,
-        71.9,
-        80.1,
-        73.2
-    ]
-})
+classification_metrics_df = pd.DataFrame(
+    {
+        "Metric": [
+            "Accuracy",
+            "Precision",
+            "Recall",
+            "F1 Score",
+            "Balanced Accuracy"
+        ],
+
+        "Score": [
+            72.5,
+            90.6,
+            71.9,
+            80.1,
+            73.2
+        ]
+    }
+)
 
 
 fig_metrics = px.bar(
@@ -368,6 +547,7 @@ fig_metrics = px.bar(
 
 
 fig_metrics.update_traces(
+    marker_color=accent,
     texttemplate="%{text:.1f}%",
     textposition="outside"
 )
@@ -375,25 +555,36 @@ fig_metrics.update_traces(
 
 fig_metrics.update_layout(
     height=380,
+
     margin=dict(
         l=20,
         r=20,
         t=10,
         b=20
     ),
+
+    xaxis_title="",
+
     yaxis=dict(
         title="Score (%)",
         range=[0, 100],
         ticksuffix="%"
     ),
-    xaxis_title="",
+
     showlegend=False
+)
+
+
+style_chart(
+    fig_metrics
 )
 
 
 st.plotly_chart(
     fig_metrics,
-    use_container_width=True,
+    width="stretch",
+    theme=None,
+
     config={
         "displayModeBar": False
     }
@@ -416,40 +607,79 @@ section_title(
 )
 
 
-classification_df = pd.DataFrame({
-    "Model": [
-        "Dummy Baseline",
-        "Standard Logistic Regression",
-        "Balanced Logistic Regression"
-    ],
-    "Accuracy": [
-        77.4,
-        80.9,
-        72.5
-    ],
-    "Balanced Accuracy": [
-        50.0,
-        64.8,
-        73.2
-    ]
-})
+classification_df = pd.DataFrame(
+    {
+        "Model": [
+            "Dummy Baseline",
+            "Standard Logistic Regression",
+            "Balanced Logistic Regression"
+        ],
 
+        "Accuracy": [
+            77.4,
+            80.9,
+            72.5
+        ],
 
-st.dataframe(
-    classification_df,
-    use_container_width=True,
-    hide_index=True
+        "Balanced Accuracy": [
+            50.0,
+            64.8,
+            73.2
+        ]
+    }
 )
 
 
-classification_long = classification_df.melt(
-    id_vars="Model",
-    value_vars=[
-        "Accuracy",
+classification_display = (
+    classification_df
+    .copy()
+)
+
+
+classification_display[
+    "Accuracy"
+] = (
+    classification_display[
+        "Accuracy"
+    ]
+    .map(
+        lambda value:
+            f"{value:.1f}%"
+    )
+)
+
+
+classification_display[
+    "Balanced Accuracy"
+] = (
+    classification_display[
         "Balanced Accuracy"
-    ],
-    var_name="Metric",
-    value_name="Score"
+    ]
+    .map(
+        lambda value:
+            f"{value:.1f}%"
+    )
+)
+
+
+show_theme_table(
+    classification_display
+)
+
+
+classification_long = (
+    classification_df
+    .melt(
+        id_vars="Model",
+
+        value_vars=[
+            "Accuracy",
+            "Balanced Accuracy"
+        ],
+
+        var_name="Metric",
+        value_name="Score"
+    )
 )
 
 
@@ -464,25 +694,36 @@ fig_compare = px.bar(
 
 fig_compare.update_layout(
     height=420,
+
     margin=dict(
         l=20,
         r=20,
         t=10,
         b=20
     ),
+
     xaxis_title="",
+
     yaxis=dict(
         title="Score (%)",
         range=[0, 100],
         ticksuffix="%"
     ),
+
     legend_title=""
+)
+
+
+style_chart(
+    fig_compare
 )
 
 
 st.plotly_chart(
     fig_compare,
-    use_container_width=True,
+    width="stretch",
+    theme=None,
+
     config={
         "displayModeBar": False
     }
@@ -530,6 +771,7 @@ fig_balanced_rank = px.bar(
 
 
 fig_balanced_rank.update_traces(
+    marker_color=accent,
     texttemplate="%{text:.1f}%",
     textposition="outside"
 )
@@ -537,25 +779,36 @@ fig_balanced_rank.update_traces(
 
 fig_balanced_rank.update_layout(
     height=300,
+
     margin=dict(
         l=20,
         r=70,
         t=10,
         b=20
     ),
+
     xaxis=dict(
         title="Balanced Accuracy (%)",
         range=[0, 100],
         ticksuffix="%"
     ),
+
     yaxis_title="",
+
     showlegend=False
+)
+
+
+style_chart(
+    fig_balanced_rank
 )
 
 
 st.plotly_chart(
     fig_balanced_rank,
-    use_container_width=True,
+    width="stretch",
+    theme=None,
+
     config={
         "displayModeBar": False
     }
@@ -578,34 +831,38 @@ section_title(
 )
 
 
-summary_df = pd.DataFrame({
-    "Model": [
-        "Linear Regression",
-        "Balanced Logistic Regression"
-    ],
-    "Prediction Type": [
-        "Regression",
-        "Classification"
-    ],
-    "Target": [
-        "Exam Score",
-        "Pass / Fail"
-    ],
-    "Main Output": [
-        "Numerical score",
-        "Class + probability"
-    ],
-    "Key Evaluation": [
-        "MAE 9.38 | RMSE 11.76 | R² 0.444",
-        "Balanced Accuracy 73.2% | F1 80.1% | AUC 0.814"
-    ]
-})
+summary_df = pd.DataFrame(
+    {
+        "Model": [
+            "Linear Regression",
+            "Balanced Logistic Regression"
+        ],
+
+        "Prediction Type": [
+            "Regression",
+            "Classification"
+        ],
+
+        "Target": [
+            "Exam Score",
+            "Pass / Fail"
+        ],
+
+        "Main Output": [
+            "Numerical score",
+            "Class + probability"
+        ],
+
+        "Key Evaluation": [
+            "MAE 9.38 | RMSE 11.76 | R² 0.444",
+            "Balanced Accuracy 73.2% | F1 80.1% | AUC 0.814"
+        ]
+    }
+)
 
 
-st.dataframe(
-    summary_df,
-    use_container_width=True,
-    hide_index=True
+show_theme_table(
+    summary_df
 )
 
 
@@ -641,12 +898,12 @@ with role1:
 with plus_col:
 
     st.markdown(
-        """
+        f"""
         <div style="
             text-align:center;
             font-size:30px;
             padding-top:45px;
-            color:#6B7280;
+            color:{chart_muted};
         ">
             +
         </div>

@@ -24,8 +24,14 @@ from sklearn.metrics import (
     roc_curve,
 )
 
-from components.styles import apply_global_styles
+from components.styles import (
+    apply_global_styles,
+    get_plotly_template,
+    get_theme_colors,
+)
+
 from components.footer import show_footer
+
 from components.icons import (
     page_title,
     section_title,
@@ -70,6 +76,139 @@ df = load_data()
 
 
 # ------------------------------------------------------------
+# THEME SETTINGS
+# ------------------------------------------------------------
+
+plotly_template = get_plotly_template()
+theme_colors = get_theme_colors()
+
+chart_background = theme_colors["background"]
+surface = theme_colors["surface"]
+chart_text = theme_colors["text"]
+chart_muted = theme_colors["muted"]
+chart_border = theme_colors["border"]
+accent = theme_colors["accent"]
+
+
+# ------------------------------------------------------------
+# COMMON PLOTLY STYLE
+# ------------------------------------------------------------
+
+def style_chart(fig):
+
+    fig.update_layout(
+        template=plotly_template,
+        paper_bgcolor=chart_background,
+        plot_bgcolor=chart_background,
+        font=dict(
+            color=chart_text
+        ),
+    )
+
+    fig.update_xaxes(
+        color=chart_text,
+        gridcolor=chart_border,
+        zerolinecolor=chart_border
+    )
+
+    fig.update_yaxes(
+        color=chart_text,
+        gridcolor=chart_border,
+        zerolinecolor=chart_border
+    )
+
+    return fig
+
+
+# ------------------------------------------------------------
+# THEME-AWARE HTML TABLE
+# ------------------------------------------------------------
+
+def show_theme_table(
+    table_df,
+    max_height=None
+):
+
+    clean_df = (
+        table_df
+        .copy()
+        .fillna("—")
+    )
+
+    table_html = clean_df.to_html(
+        index=False,
+        escape=True,
+        border=0,
+        classes="logistic-table"
+    )
+
+    if max_height is not None:
+
+        container_style = (
+            f"max-height:{max_height}px;"
+            "overflow:auto;"
+        )
+
+    else:
+
+        container_style = (
+            "overflow-x:auto;"
+        )
+
+    html = f"""
+    <style>
+
+    .logistic-table-container {{
+        {container_style}
+        border: 1px solid {chart_border};
+        border-radius: 10px;
+        background: {surface};
+        margin-bottom: 14px;
+    }}
+
+    .logistic-table {{
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        color: {chart_text};
+        background: {surface};
+    }}
+
+    .logistic-table thead th {{
+        text-align: left;
+        padding: 10px 11px;
+        font-weight: 600;
+        color: {chart_muted};
+        background: {surface};
+        border-bottom: 1px solid {chart_border};
+        white-space: nowrap;
+    }}
+
+    .logistic-table tbody td {{
+        padding: 9px 11px;
+        color: {chart_text};
+        background: {surface};
+        border-bottom: 1px solid {chart_border};
+        white-space: nowrap;
+    }}
+
+    .logistic-table tbody tr:last-child td {{
+        border-bottom: none;
+    }}
+
+    </style>
+
+    <div class="logistic-table-container">
+        {table_html}
+    </div>
+    """
+
+    st.html(
+        html
+    )
+
+
+# ------------------------------------------------------------
 # MODEL VARIABLES
 # ------------------------------------------------------------
 
@@ -99,11 +238,6 @@ def prepare_classification_results():
     X = df[features].copy()
 
     # Keep labels as text so they match the saved model.
-    #
-    # Saved model classes:
-    # "Fail" and "Pass"
-    #
-    # Do NOT map these to 0 and 1 here.
     y = df[target].astype(str)
 
 
@@ -130,13 +264,15 @@ def prepare_classification_results():
         X_test
     )
 
-    probability_matrix = balanced_model.predict_proba(
-        X_test
+    probability_matrix = (
+        balanced_model.predict_proba(
+            X_test
+        )
     )
 
 
     # --------------------------------------------------------
-    # IDENTIFY THE "PASS" PROBABILITY COLUMN
+    # IDENTIFY PASS PROBABILITY COLUMN
     # --------------------------------------------------------
 
     balanced_classes = list(
@@ -149,39 +285,45 @@ def prepare_classification_results():
         "Pass"
     )
 
-    y_prob_balanced = probability_matrix[
-        :,
-        pass_index
-    ]
+    y_prob_balanced = (
+        probability_matrix[
+            :,
+            pass_index
+        ]
+    )
 
 
     # --------------------------------------------------------
     # STANDARD LOGISTIC REGRESSION
     # --------------------------------------------------------
 
-    standard_model = Pipeline([
-        (
-            "preprocessing",
-            Pipeline([
-                (
-                    "imputer",
-                    SimpleImputer(
-                        strategy="median"
-                    ),
+    standard_model = Pipeline(
+        [
+            (
+                "preprocessing",
+                Pipeline(
+                    [
+                        (
+                            "imputer",
+                            SimpleImputer(
+                                strategy="median"
+                            ),
+                        ),
+                        (
+                            "scaler",
+                            StandardScaler(),
+                        ),
+                    ]
                 ),
-                (
-                    "scaler",
-                    StandardScaler(),
-                ),
-            ]),
-        ),
-        (
-            "model",
-            LogisticRegression(
-                max_iter=1000
             ),
-        ),
-    ])
+            (
+                "model",
+                LogisticRegression(
+                    max_iter=1000
+                ),
+            ),
+        ]
+    )
 
     standard_model.fit(
         X_train,
@@ -296,12 +438,6 @@ def prepare_classification_results():
     # --------------------------------------------------------
     # ROC / AUC
     # --------------------------------------------------------
-    #
-    # ROC functions need a binary target.
-    # Convert ONLY for ROC/AUC.
-    # All other classification metrics continue using
-    # "Fail" / "Pass" labels.
-    # --------------------------------------------------------
 
     y_test_binary = (
         y_test == "Pass"
@@ -322,25 +458,27 @@ def prepare_classification_results():
     # MODEL COMPARISON TABLE
     # --------------------------------------------------------
 
-    comparison_df = pd.DataFrame({
-        "Model": [
-            "Dummy Baseline",
-            "Standard Logistic Regression",
-            "Balanced Logistic Regression",
-        ],
+    comparison_df = pd.DataFrame(
+        {
+            "Model": [
+                "Dummy Baseline",
+                "Standard Logistic Regression",
+                "Balanced Logistic Regression",
+            ],
 
-        "Accuracy": [
-            dummy_metrics["Accuracy"],
-            standard_metrics["Accuracy"],
-            balanced_metrics["Accuracy"],
-        ],
+            "Accuracy": [
+                dummy_metrics["Accuracy"],
+                standard_metrics["Accuracy"],
+                balanced_metrics["Accuracy"],
+            ],
 
-        "Balanced Accuracy": [
-            dummy_metrics["Balanced Accuracy"],
-            standard_metrics["Balanced Accuracy"],
-            balanced_metrics["Balanced Accuracy"],
-        ],
-    })
+            "Balanced Accuracy": [
+                dummy_metrics["Balanced Accuracy"],
+                standard_metrics["Balanced Accuracy"],
+                balanced_metrics["Balanced Accuracy"],
+            ],
+        }
+    )
 
 
     return (
@@ -410,6 +548,7 @@ o3.metric(
     "Input Features",
     len(features),
 )
+
 
 with o4:
 
@@ -482,16 +621,18 @@ with class_col1:
 
 with class_col2:
 
-    class_df = pd.DataFrame({
-        "Status": [
-            "Pass",
-            "Fail",
-        ],
-        "Students": [
-            pass_count,
-            fail_count,
-        ],
-    })
+    class_df = pd.DataFrame(
+        {
+            "Status": [
+                "Pass",
+                "Fail",
+            ],
+            "Students": [
+                pass_count,
+                fail_count,
+            ],
+        }
+    )
 
 
     fig_class = px.pie(
@@ -509,20 +650,33 @@ with class_col2:
 
 
     fig_class.update_layout(
+        template=plotly_template,
+
         height=260,
+
         margin=dict(
             l=10,
             r=10,
             t=5,
             b=5,
         ),
+
         showlegend=False,
+
+        paper_bgcolor=chart_background,
+        plot_bgcolor=chart_background,
+
+        font=dict(
+            color=chart_text
+        ),
     )
 
 
     st.plotly_chart(
         fig_class,
         width="stretch",
+        theme=None,
+
         config={
             "displayModeBar": False
         },
@@ -559,6 +713,7 @@ metric_names = [
 
 
 metric_descriptions = {
+
     "Accuracy":
         "Overall percentage of correct predictions.",
 
@@ -650,10 +805,12 @@ section_title(
 
 cm_df = pd.DataFrame(
     cm_balanced,
+
     index=[
         "Actual Fail",
         "Actual Pass",
     ],
+
     columns=[
         "Predicted Fail",
         "Predicted Pass",
@@ -670,22 +827,44 @@ fig_cm = px.imshow(
 
 
 fig_cm.update_layout(
+    template=plotly_template,
+
     height=380,
+
     margin=dict(
         l=20,
         r=20,
         t=10,
         b=20,
     ),
+
+    paper_bgcolor=chart_background,
+    plot_bgcolor=chart_background,
+
+    font=dict(
+        color=chart_text
+    ),
+
     coloraxis_colorbar=dict(
         title="Students"
     ),
 )
 
 
+fig_cm.update_xaxes(
+    color=chart_text
+)
+
+fig_cm.update_yaxes(
+    color=chart_text
+)
+
+
 st.plotly_chart(
     fig_cm,
     width="stretch",
+    theme=None,
+
     config={
         "displayModeBar": False
     },
@@ -783,19 +962,19 @@ display_comparison[
 )
 
 
-st.dataframe(
-    display_comparison,
-    width="stretch",
-    hide_index=True,
+show_theme_table(
+    display_comparison
 )
 
 
 compare_long = comparison_df.melt(
     id_vars="Model",
+
     value_vars=[
         "Accuracy",
         "Balanced Accuracy",
     ],
+
     var_name="Metric",
     value_name="Score",
 )
@@ -812,22 +991,33 @@ fig_compare = px.bar(
 
 fig_compare.update_layout(
     height=380,
+
     margin=dict(
         l=20,
         r=20,
         t=10,
         b=20,
     ),
+
     yaxis_title="Score",
     xaxis_title="",
+
     yaxis_tickformat=".0%",
+
     legend_title="",
+)
+
+
+style_chart(
+    fig_compare
 )
 
 
 st.plotly_chart(
     fig_compare,
     width="stretch",
+    theme=None,
+
     config={
         "displayModeBar": False
     },
@@ -875,6 +1065,7 @@ fig_rank = px.bar(
 
 
 fig_rank.update_traces(
+    marker_color=accent,
     texttemplate="%{text:.1%}",
     textposition="outside",
 )
@@ -882,22 +1073,33 @@ fig_rank.update_traces(
 
 fig_rank.update_layout(
     height=280,
+
     margin=dict(
         l=20,
         r=70,
         t=10,
         b=20,
     ),
+
     xaxis_title="Balanced Accuracy",
     yaxis_title="",
+
     xaxis_tickformat=".0%",
+
     showlegend=False,
+)
+
+
+style_chart(
+    fig_rank
 )
 
 
 st.plotly_chart(
     fig_rank,
     width="stretch",
+    theme=None,
+
     config={
         "displayModeBar": False
     },
@@ -914,10 +1116,15 @@ section_title(
 )
 
 
-roc_df = pd.DataFrame({
-    "False Positive Rate": fpr,
-    "True Positive Rate": tpr,
-})
+roc_df = pd.DataFrame(
+    {
+        "False Positive Rate":
+            fpr,
+
+        "True Positive Rate":
+            tpr,
+    }
+)
 
 
 fig_roc = px.line(
@@ -927,13 +1134,25 @@ fig_roc = px.line(
 )
 
 
+fig_roc.update_traces(
+    line=dict(
+        color=accent,
+        width=3
+    )
+)
+
+
 fig_roc.add_shape(
     type="line",
+
     x0=0,
     y0=0,
+
     x1=1,
     y1=1,
+
     line=dict(
+        color=chart_muted,
         dash="dash",
         width=2,
     ),
@@ -942,12 +1161,14 @@ fig_roc.add_shape(
 
 fig_roc.update_layout(
     height=400,
+
     margin=dict(
         l=20,
         r=20,
         t=10,
         b=20,
     ),
+
     xaxis_title="False Positive Rate",
     yaxis_title="True Positive Rate",
 )
@@ -960,6 +1181,7 @@ fig_roc.update_xaxes(
     ]
 )
 
+
 fig_roc.update_yaxes(
     range=[
         0,
@@ -968,9 +1190,16 @@ fig_roc.update_yaxes(
 )
 
 
+style_chart(
+    fig_roc
+)
+
+
 st.plotly_chart(
     fig_roc,
     width="stretch",
+    theme=None,
+
     config={
         "displayModeBar": False
     },

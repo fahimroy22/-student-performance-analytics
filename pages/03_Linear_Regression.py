@@ -15,8 +15,14 @@ from sklearn.metrics import (
     r2_score
 )
 
-from components.styles import apply_global_styles
+from components.styles import (
+    apply_global_styles,
+    get_plotly_template,
+    get_theme_colors,
+)
+
 from components.footer import show_footer
+
 from components.icons import (
     page_title,
     section_title,
@@ -61,6 +67,51 @@ df = load_data()
 
 
 # ------------------------------------------------------------
+# THEME SETTINGS
+# ------------------------------------------------------------
+
+plotly_template = get_plotly_template()
+theme_colors = get_theme_colors()
+
+chart_background = theme_colors["background"]
+surface = theme_colors["surface"]
+chart_text = theme_colors["text"]
+chart_muted = theme_colors["muted"]
+chart_border = theme_colors["border"]
+accent = theme_colors["accent"]
+
+
+# ------------------------------------------------------------
+# COMMON PLOTLY STYLE
+# ------------------------------------------------------------
+
+def style_chart(fig):
+
+    fig.update_layout(
+        template=plotly_template,
+        paper_bgcolor=chart_background,
+        plot_bgcolor=chart_background,
+        font=dict(
+            color=chart_text
+        ),
+    )
+
+    fig.update_xaxes(
+        color=chart_text,
+        gridcolor=chart_border,
+        zerolinecolor=chart_border
+    )
+
+    fig.update_yaxes(
+        color=chart_text,
+        gridcolor=chart_border,
+        zerolinecolor=chart_border
+    )
+
+    return fig
+
+
+# ------------------------------------------------------------
 # MODEL VARIABLES
 # ------------------------------------------------------------
 
@@ -95,7 +146,9 @@ def prepare_regression_results():
 
     model = load_linear_model()
 
-    predictions = model.predict(X_test)
+    predictions = model.predict(
+        X_test
+    )
 
     mae = mean_absolute_error(
         y_test,
@@ -114,10 +167,15 @@ def prepare_regression_results():
         predictions
     )
 
-    results_df = pd.DataFrame({
-        "Actual Score": y_test.values,
-        "Predicted Score": predictions
-    })
+    results_df = pd.DataFrame(
+        {
+            "Actual Score":
+                y_test.values,
+
+            "Predicted Score":
+                predictions
+        }
+    )
 
     results_df["Residual"] = (
         results_df["Actual Score"]
@@ -202,7 +260,9 @@ m1, m2, m3 = st.columns(3)
 
 with m1:
 
-    with st.container(border=True):
+    with st.container(
+        border=True
+    ):
 
         st.metric(
             "MAE",
@@ -216,7 +276,9 @@ with m1:
 
 with m2:
 
-    with st.container(border=True):
+    with st.container(
+        border=True
+    ):
 
         st.metric(
             "RMSE",
@@ -230,7 +292,9 @@ with m2:
 
 with m3:
 
-    with st.container(border=True):
+    with st.container(
+        border=True
+    ):
 
         st.metric(
             "R²",
@@ -260,7 +324,10 @@ section_title(
 
 
 plot_results = results_df.sample(
-    min(15000, len(results_df)),
+    min(
+        15000,
+        len(results_df)
+    ),
     random_state=42
 )
 
@@ -273,13 +340,22 @@ fig_actual = px.scatter(
 )
 
 
+fig_actual.update_traces(
+    marker=dict(
+        color=accent
+    )
+)
+
+
 fig_actual.add_shape(
     type="line",
     x0=0,
     y0=0,
     x1=100,
     y1=100,
+
     line=dict(
+        color=chart_muted,
         dash="dash",
         width=2
     )
@@ -288,12 +364,14 @@ fig_actual.add_shape(
 
 fig_actual.update_layout(
     height=430,
+
     margin=dict(
         l=20,
         r=20,
         t=10,
         b=20
     ),
+
     xaxis_title="Actual Exam Score",
     yaxis_title="Predicted Exam Score"
 )
@@ -303,14 +381,22 @@ fig_actual.update_xaxes(
     range=[0, 100]
 )
 
+
 fig_actual.update_yaxes(
     range=[0, 100]
 )
 
 
+style_chart(
+    fig_actual
+)
+
+
 st.plotly_chart(
     fig_actual,
-    use_container_width=True,
+    width="stretch",
+    theme=None,
+
     config={
         "displayModeBar": False
     }
@@ -357,28 +443,45 @@ with residual_col1:
     )
 
 
+    fig_residual.update_traces(
+        marker=dict(
+            color=accent
+        )
+    )
+
+
     fig_residual.add_hline(
         y=0,
-        line_dash="dash"
+        line_dash="dash",
+        line_color=chart_muted
     )
 
 
     fig_residual.update_layout(
         height=350,
+
         margin=dict(
             l=20,
             r=20,
             t=10,
             b=20
         ),
+
         xaxis_title="Predicted Exam Score",
         yaxis_title="Residual"
     )
 
 
+    style_chart(
+        fig_residual
+    )
+
+
     st.plotly_chart(
         fig_residual,
-        use_container_width=True,
+        width="stretch",
+        theme=None,
+
         config={
             "displayModeBar": False
         }
@@ -398,23 +501,38 @@ with residual_col2:
     )
 
 
+    fig_residual_hist.update_traces(
+        marker_color=accent
+    )
+
+
     fig_residual_hist.update_layout(
         height=350,
+
         margin=dict(
             l=20,
             r=20,
             t=10,
             b=20
         ),
+
         xaxis_title="Residual",
         yaxis_title="Students",
+
         showlegend=False
+    )
+
+
+    style_chart(
+        fig_residual_hist
     )
 
 
     st.plotly_chart(
         fig_residual_hist,
-        use_container_width=True,
+        width="stretch",
+        theme=None,
+
         config={
             "displayModeBar": False
         }
@@ -447,17 +565,21 @@ coefficients = (
 )
 
 
-coefficient_df = pd.DataFrame({
-    "Feature": [
-        "Previous Exam Score",
-        "Previous GPA",
-        "Attendance",
-        "Assignment Completion",
-        "Study Hours",
-        "Practice Tests"
-    ],
-    "Coefficient": coefficients
-})
+coefficient_df = pd.DataFrame(
+    {
+        "Feature": [
+            "Previous Exam Score",
+            "Previous GPA",
+            "Attendance",
+            "Assignment Completion",
+            "Study Hours",
+            "Practice Tests"
+        ],
+
+        "Coefficient":
+            coefficients
+    }
+)
 
 
 coefficient_df["Absolute Influence"] = (
@@ -466,9 +588,12 @@ coefficient_df["Absolute Influence"] = (
 )
 
 
-coefficient_df = coefficient_df.sort_values(
-    "Absolute Influence",
-    ascending=True
+coefficient_df = (
+    coefficient_df
+    .sort_values(
+        "Absolute Influence",
+        ascending=True
+    )
 )
 
 
@@ -482,6 +607,8 @@ fig_coeff = px.bar(
 
 
 fig_coeff.update_traces(
+    marker_color=accent,
+
     texttemplate="%{text:.2f}",
     textposition="outside"
 )
@@ -489,21 +616,31 @@ fig_coeff.update_traces(
 
 fig_coeff.update_layout(
     height=340,
+
     margin=dict(
         l=20,
         r=60,
         t=10,
         b=20
     ),
+
     xaxis_title="Standardized Coefficient",
     yaxis_title="",
+
     showlegend=False
+)
+
+
+style_chart(
+    fig_coeff
 )
 
 
 st.plotly_chart(
     fig_coeff,
-    use_container_width=True,
+    width="stretch",
+    theme=None,
+
     config={
         "displayModeBar": False
     }

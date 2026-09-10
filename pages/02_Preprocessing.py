@@ -7,12 +7,18 @@ import pandas as pd
 import plotly.express as px
 from pathlib import Path
 
-from components.styles import apply_global_styles
+from components.styles import (
+    apply_global_styles,
+    get_plotly_template,
+    get_theme_colors,
+)
+
 from components.footer import show_footer
+
 from components.icons import (
     page_title,
     section_title,
-    icon_card
+    icon_card,
 )
 
 
@@ -51,6 +57,142 @@ df = load_data()
 
 
 # ------------------------------------------------------------
+# THEME SETTINGS
+# ------------------------------------------------------------
+
+plotly_template = get_plotly_template()
+theme_colors = get_theme_colors()
+
+chart_background = theme_colors["background"]
+surface = theme_colors["surface"]
+chart_text = theme_colors["text"]
+chart_muted = theme_colors["muted"]
+chart_border = theme_colors["border"]
+accent = theme_colors["accent"]
+
+
+# ------------------------------------------------------------
+# COMMON PLOTLY STYLE
+# ------------------------------------------------------------
+
+def style_chart(fig):
+
+    fig.update_layout(
+        template=plotly_template,
+        paper_bgcolor=chart_background,
+        plot_bgcolor=chart_background,
+        font=dict(
+            color=chart_text
+        ),
+    )
+
+    fig.update_xaxes(
+        color=chart_text,
+        gridcolor=chart_border,
+        zerolinecolor=chart_border
+    )
+
+    fig.update_yaxes(
+        color=chart_text,
+        gridcolor=chart_border,
+        zerolinecolor=chart_border
+    )
+
+    return fig
+
+
+# ------------------------------------------------------------
+# THEME-AWARE HTML TABLE
+# ------------------------------------------------------------
+
+def show_theme_table(
+    table_df,
+    max_height=None
+):
+
+    clean_df = (
+        table_df
+        .copy()
+        .fillna("—")
+    )
+
+    table_html = clean_df.to_html(
+        index=False,
+        escape=True,
+        border=0,
+        classes="preprocess-table"
+    )
+
+    if max_height is not None:
+
+        container_style = (
+            f"max-height:{max_height}px;"
+            "overflow:auto;"
+        )
+
+    else:
+
+        container_style = (
+            "overflow-x:auto;"
+        )
+
+    html = f"""
+    <style>
+
+    .preprocess-table-container {{
+        {container_style}
+        border: 1px solid {chart_border};
+        border-radius: 10px;
+        background: {surface};
+        margin-bottom: 14px;
+    }}
+
+    .preprocess-table {{
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        color: {chart_text};
+        background: {surface};
+    }}
+
+    .preprocess-table thead th {{
+        text-align: left;
+        padding: 10px 11px;
+        font-weight: 600;
+        color: {chart_muted};
+        background: {surface};
+        border-bottom: 1px solid {chart_border};
+        white-space: nowrap;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }}
+
+    .preprocess-table tbody td {{
+        padding: 9px 11px;
+        color: {chart_text};
+        background: {surface};
+        border-bottom: 1px solid {chart_border};
+        white-space: nowrap;
+    }}
+
+    .preprocess-table tbody tr:last-child td {{
+        border-bottom: none;
+    }}
+
+    </style>
+
+    <div class="preprocess-table-container">
+        {table_html}
+    </div>
+    """
+
+    st.html(
+        html
+    )
+
+
+# ------------------------------------------------------------
 # MODEL CONFIGURATION
 # ------------------------------------------------------------
 
@@ -77,21 +219,40 @@ model_columns = features + [
 # ------------------------------------------------------------
 
 feature_labels = {
-    "previous_exam_score": "Previous Exam Score",
-    "previous_gpa": "Previous GPA",
-    "attendance_percentage": "Attendance",
-    "assignment_completion_rate": "Assignment Completion",
-    "study_hours_per_day": "Study Hours",
-    "practice_tests_completed": "Practice Tests",
-    "exam_score": "Exam Score",
-    "pass_status": "Pass / Fail"
+
+    "previous_exam_score":
+        "Previous Exam Score",
+
+    "previous_gpa":
+        "Previous GPA",
+
+    "attendance_percentage":
+        "Attendance",
+
+    "assignment_completion_rate":
+        "Assignment Completion",
+
+    "study_hours_per_day":
+        "Study Hours",
+
+    "practice_tests_completed":
+        "Practice Tests",
+
+    "exam_score":
+        "Exam Score",
+
+    "pass_status":
+        "Pass / Fail"
 }
 
 
 def friendly_name(column):
+
     return feature_labels.get(
         column,
-        column.replace("_", " ").title()
+        column
+        .replace("_", " ")
+        .title()
     )
 
 
@@ -325,7 +486,9 @@ selected_missing.columns = [
 
 selected_missing["Variable"] = (
     selected_missing["Variable"]
-    .map(friendly_name)
+    .map(
+        friendly_name
+    )
 )
 
 
@@ -349,16 +512,14 @@ if not missing_plot.empty:
         ),
 
         x="Missing Values",
-
         y="Variable",
-
         orientation="h",
-
         text="Missing Values"
     )
 
 
     fig_missing.update_traces(
+        marker_color=accent,
         textposition="outside"
     )
 
@@ -375,16 +536,22 @@ if not missing_plot.empty:
         ),
 
         xaxis_title="Missing Values",
-
         yaxis_title="",
 
         showlegend=False
     )
 
 
+    style_chart(
+        fig_missing
+    )
+
+
     st.plotly_chart(
         fig_missing,
-        use_container_width=True,
+        width="stretch",
+        theme=None,
+
         config={
             "displayModeBar": False
         }
@@ -466,16 +633,18 @@ with split_col1:
 
 with split_col2:
 
-    split_df = pd.DataFrame({
-        "Dataset": [
-            "Training",
-            "Testing"
-        ],
-        "Records": [
-            train_size,
-            test_size
-        ]
-    })
+    split_df = pd.DataFrame(
+        {
+            "Dataset": [
+                "Training",
+                "Testing"
+            ],
+            "Records": [
+                train_size,
+                test_size
+            ]
+        }
+    )
 
 
     fig_split = px.pie(
@@ -494,6 +663,8 @@ with split_col2:
 
     fig_split.update_layout(
 
+        template=plotly_template,
+
         height=260,
 
         margin=dict(
@@ -503,13 +674,22 @@ with split_col2:
             b=5
         ),
 
-        showlegend=False
+        showlegend=False,
+
+        paper_bgcolor=chart_background,
+        plot_bgcolor=chart_background,
+
+        font=dict(
+            color=chart_text
+        )
     )
 
 
     st.plotly_chart(
         fig_split,
-        use_container_width=True,
+        width="stretch",
+        theme=None,
+
         config={
             "displayModeBar": False
         }
@@ -554,12 +734,12 @@ with transform1:
 with arrow:
 
     st.markdown(
-        """
+        f"""
         <div style="
             text-align:center;
             font-size:30px;
             padding-top:45px;
-            color:#6B7280;
+            color:{chart_muted};
         ">
             →
         </div>
@@ -587,17 +767,17 @@ with transform2:
 # ------------------------------------------------------------
 
 st.markdown(
-    """
+    f"""
     <div style="
         text-align:center;
         padding:14px;
         margin-top:10px;
         margin-bottom:8px;
-        border:1px solid #E5E7EB;
+        border:1px solid {chart_border};
         border-radius:10px;
-        background:#FFFFFF;
+        background:{surface};
         font-size:17px;
-        color:#374151;
+        color:{chart_text};
     ">
         Standardized value =
         (value − training mean) ÷ training standard deviation
@@ -723,7 +903,9 @@ section_title(
 
 
 preview = (
-    df[model_columns]
+    df[
+        model_columns
+    ]
     .head(8)
     .copy()
 )
@@ -734,10 +916,8 @@ preview = preview.rename(
 )
 
 
-st.dataframe(
-    preview,
-    use_container_width=True,
-    hide_index=True
+show_theme_table(
+    preview
 )
 
 

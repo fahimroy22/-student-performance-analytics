@@ -4,6 +4,8 @@
 
 import streamlit as st
 
+from components.styles import get_theme_colors
+
 
 # ------------------------------------------------------------
 # SVG PATHS
@@ -111,9 +113,14 @@ ICONS = {
 def svg_icon(
     name,
     size=24,
-    color="#355C7D",
+    color=None,
     stroke_width=2
 ):
+
+    theme = get_theme_colors()
+
+    if color is None:
+        color = theme["accent"]
 
     paths = ICONS.get(
         name,
@@ -144,9 +151,12 @@ def page_title(
     subtitle=None
 ):
 
+    theme = get_theme_colors()
+
     icon_svg = svg_icon(
         icon_name,
-        size=31
+        size=31,
+        color=theme["accent"]
     )
 
     html = (
@@ -155,7 +165,7 @@ def page_title(
         'gap:11px;'
         'margin-bottom:4px;">'
         f'{icon_svg}'
-        '<h1 style="margin:0;padding:0;">'
+        f'<h1 style="margin:0;padding:0;color:{theme["text"]};">'
         f'{title}'
         '</h1>'
         '</div>'
@@ -170,7 +180,7 @@ def page_title(
 
         subtitle_html = (
             '<div style="'
-            'color:#6B7280;'
+            f'color:{theme["muted"]};'
             'font-size:14px;'
             'margin-top:3px;'
             'margin-bottom:20px;">'
@@ -193,9 +203,12 @@ def section_title(
     title
 ):
 
+    theme = get_theme_colors()
+
     icon_svg = svg_icon(
         icon_name,
-        size=21
+        size=21,
+        color=theme["accent"]
     )
 
     html = (
@@ -206,7 +219,7 @@ def section_title(
         'margin-top:18px;'
         'margin-bottom:10px;">'
         f'{icon_svg}'
-        '<h3 style="margin:0;padding:0;">'
+        f'<h3 style="margin:0;padding:0;color:{theme["text"]};">'
         f'{title}'
         '</h3>'
         '</div>'
@@ -229,16 +242,19 @@ def icon_card(
     icon_size=25
 ):
 
+    theme = get_theme_colors()
+
     icon_svg = svg_icon(
         icon_name,
-        size=icon_size
+        size=icon_size,
+        color=theme["accent"]
     )
 
     html = (
         '<div style="'
-        'border:1px solid #E5E7EB;'
+        f'border:1px solid {theme["border"]};'
         'border-radius:10px;'
-        'background:#FFFFFF;'
+        f'background:{theme["surface"]};'
         'padding:16px;'
         'min-height:115px;">'
 
@@ -248,13 +264,13 @@ def icon_card(
 
         '<div style="'
         'font-weight:600;'
-        'color:#1F2937;'
+        f'color:{theme["text"]};'
         'margin-bottom:5px;">'
         f'{title}'
         '</div>'
 
         '<div style="'
-        'color:#6B7280;'
+        f'color:{theme["muted"]};'
         'font-size:13px;'
         'line-height:1.45;">'
         f'{description}'
