@@ -1,43 +1,20 @@
 import streamlit as st
 
 
-# ============================================================
-# GLOBAL APPLICATION STYLES
-# ============================================================
-
 def apply_global_styles():
-
-    # --------------------------------------------------------
-    # THEME STATE
-    # --------------------------------------------------------
-
     if "dark_mode" not in st.session_state:
         st.session_state.dark_mode = False
 
-
-    # --------------------------------------------------------
-    # SIDEBAR THEME TOGGLE
-    # --------------------------------------------------------
-
     with st.sidebar:
-
         st.markdown("### Appearance")
-
         dark_mode = st.toggle(
             "Dark mode",
             value=st.session_state.dark_mode,
             key="global_dark_mode_toggle"
         )
-
         st.session_state.dark_mode = dark_mode
 
-
-    # --------------------------------------------------------
-    # THEME COLORS
-    # --------------------------------------------------------
-
     if st.session_state.dark_mode:
-
         colors = {
             "app_bg": "#0F172A",
             "sidebar_bg": "#111827",
@@ -49,9 +26,7 @@ def apply_global_styles():
             "accent": "#5B8DB8",
             "hover": "#253247",
         }
-
     else:
-
         colors = {
             "app_bg": "#F7F8FA",
             "sidebar_bg": "#FFFFFF",
@@ -64,17 +39,12 @@ def apply_global_styles():
             "hover": "#F3F4F6",
         }
 
-
-    # --------------------------------------------------------
-    # GLOBAL CSS
-    # --------------------------------------------------------
-
     st.markdown(
         f"""
         <style>
 
         /* ===================================================
-           APPLICATION
+           APP + HEADER
         =================================================== */
 
         .stApp {{
@@ -88,11 +58,6 @@ def apply_global_styles():
             padding-bottom: 3rem;
         }}
 
-
-        /* ===================================================
-           STREAMLIT HEADER
-        =================================================== */
-
         [data-testid="stHeader"] {{
             background: {colors["app_bg"]} !important;
         }}
@@ -104,11 +69,6 @@ def apply_global_styles():
         [data-testid="stDecoration"] {{
             background: {colors["app_bg"]} !important;
         }}
-
-
-        /* ===================================================
-           GENERAL TEXT
-        =================================================== */
 
         h1,
         h2,
@@ -148,20 +108,12 @@ def apply_global_styles():
             background: {colors["hover"]};
         }}
 
-
-        /* ===================================================
-           SIDEBAR TEXT
-        =================================================== */
-
         [data-testid="stSidebar"] h1,
         [data-testid="stSidebar"] h2,
         [data-testid="stSidebar"] h3,
         [data-testid="stSidebar"] h4,
         [data-testid="stSidebar"] h5,
-        [data-testid="stSidebar"] h6 {{
-            color: {colors["text"]} !important;
-        }}
-
+        [data-testid="stSidebar"] h6,
         [data-testid="stSidebar"] p,
         [data-testid="stSidebar"] label {{
             color: {colors["text"]} !important;
@@ -169,7 +121,7 @@ def apply_global_styles():
 
 
         /* ===================================================
-           SIDEBAR COLLAPSE BUTTON
+           SIDEBAR COLLAPSE / EXPAND BUTTONS
         =================================================== */
 
         [data-testid="stSidebarCollapseButton"] button {{
@@ -178,10 +130,7 @@ def apply_global_styles():
             border-radius: 10px !important;
         }}
 
-        [data-testid="stSidebarCollapseButton"] span {{
-            color: {colors["text"]} !important;
-        }}
-
+        [data-testid="stSidebarCollapseButton"] span,
         [data-testid="stSidebarCollapseButton"]
         [data-testid="stIconMaterial"] {{
             color: {colors["text"]} !important;
@@ -196,11 +145,6 @@ def apply_global_styles():
         [data-testid="stSidebarCollapseButton"] button:hover {{
             background: {colors["accent"]} !important;
         }}
-
-
-        /* ===================================================
-           SIDEBAR EXPAND BUTTON
-        =================================================== */
 
         [data-testid="stExpandSidebarButton"] {{
             background: {colors["hover"]} !important;
@@ -230,7 +174,7 @@ def apply_global_styles():
 
 
         /* ===================================================
-           CUSTOM METRIC CARDS
+           CUSTOM CARDS
         =================================================== */
 
         .metric-card {{
@@ -243,7 +187,7 @@ def apply_global_styles():
 
         .metric-label {{
             color: {colors["muted"]};
-            font-size: .88rem;
+            font-size: 0.88rem;
             margin-bottom: 7px;
         }}
 
@@ -256,7 +200,7 @@ def apply_global_styles():
 
         .metric-note {{
             color: {colors["muted"]};
-            font-size: .78rem;
+            font-size: 0.78rem;
             margin-top: 8px;
         }}
 
@@ -291,7 +235,7 @@ def apply_global_styles():
             border-radius: 10px;
             padding: 12px 14px;
             margin: 5px 0;
-            font-size: .92rem;
+            font-size: 0.92rem;
             color: {colors["text"]};
         }}
 
@@ -313,7 +257,7 @@ def apply_global_styles():
             border: 1px solid {colors["border"]};
             border-radius: 10px;
             padding: 10px 14px;
-            font-size: .88rem;
+            font-size: 0.88rem;
             font-weight: 600;
             color: {colors["text"]};
         }}
@@ -324,7 +268,7 @@ def apply_global_styles():
 
 
         /* ===================================================
-           STANDARD BUTTONS
+           NORMAL BUTTONS
         =================================================== */
 
         .stButton > button {{
@@ -361,7 +305,7 @@ def apply_global_styles():
         }}
 
 
-               /* ===================================================
+        /* ===================================================
            FORM SUBMIT BUTTONS
         =================================================== */
 
@@ -408,7 +352,7 @@ def apply_global_styles():
 
 
         /* ===================================================
-           STANDARD INPUTS
+           NUMBER / TEXT INPUTS
         =================================================== */
 
         [data-baseweb="input"] > div {{
@@ -430,7 +374,7 @@ def apply_global_styles():
 
 
         /* ===================================================
-           SELECTBOX CONTAINER
+           SELECTBOX
         =================================================== */
 
         [data-baseweb="select"] {{
@@ -453,11 +397,6 @@ def apply_global_styles():
             fill: {colors["text"]} !important;
         }}
 
-
-        /* ===================================================
-           SELECTBOX CLOSED INPUT
-        =================================================== */
-
         input[role="combobox"] {{
             background: {colors["input_bg"]} !important;
             color: {colors["text"]} !important;
@@ -471,29 +410,21 @@ def apply_global_styles():
             -webkit-text-fill-color: {colors["muted"]} !important;
         }}
 
-        input[role="combobox"]:focus {{
-            background: {colors["input_bg"]} !important;
-            color: {colors["text"]} !important;
-            -webkit-text-fill-color: {colors["text"]} !important;
-        }}
-
+        input[role="combobox"]:focus,
         input[role="combobox"]:read-only {{
             background: {colors["input_bg"]} !important;
             color: {colors["text"]} !important;
             -webkit-text-fill-color: {colors["text"]} !important;
         }}
 
-
-        /* ===================================================
-           SELECTBOX WRAPPERS
-        =================================================== */
-
-        [data-testid="stSelectbox"] [data-baseweb="select"] > div {{
+        [data-testid="stSelectbox"]
+        [data-baseweb="select"] > div {{
             background-color: {colors["input_bg"]} !important;
             border-color: {colors["border"]} !important;
         }}
 
-        [data-testid="stSelectbox"] input[role="combobox"] {{
+        [data-testid="stSelectbox"]
+        input[role="combobox"] {{
             background-color: {colors["input_bg"]} !important;
             color: {colors["text"]} !important;
             -webkit-text-fill-color: {colors["text"]} !important;
@@ -505,13 +436,10 @@ def apply_global_styles():
 
 
         /* ===================================================
-           SELECT DROPDOWN / POPOVER
+           SELECTBOX POPOVER
         =================================================== */
 
-        [data-baseweb="popover"] {{
-            background: {colors["card_bg"]} !important;
-        }}
-
+        [data-baseweb="popover"],
         [data-baseweb="popover"] > div {{
             background: {colors["card_bg"]} !important;
         }}
@@ -531,10 +459,7 @@ def apply_global_styles():
             color: {colors["text"]} !important;
         }}
 
-        [role="option"]:hover {{
-            background: {colors["hover"]} !important;
-        }}
-
+        [role="option"]:hover,
         [role="option"][aria-selected="true"] {{
             background: {colors["hover"]} !important;
             color: {colors["text"]} !important;
@@ -553,7 +478,7 @@ def apply_global_styles():
 
 
         /* ===================================================
-           DATAFRAMES
+           DATAFRAME
         =================================================== */
 
         [data-testid="stDataFrame"] {{
@@ -585,31 +510,20 @@ def apply_global_styles():
 
 
         /* ===================================================
-           HORIZONTAL RULE
+           OTHER
         =================================================== */
 
         hr {{
             border-color: {colors["border"]} !important;
         }}
 
-
-        /* ===================================================
-           LINKS
-        =================================================== */
-
         a {{
             color: {colors["accent"]};
         }}
 
-
-        /* ===================================================
-           TOGGLE
-        =================================================== */
-
         [data-testid="stToggle"] {{
             margin-bottom: 0.75rem;
         }}
-
 
         </style>
         """,
@@ -617,41 +531,19 @@ def apply_global_styles():
     )
 
 
-# ============================================================
-# PLOTLY THEME
-# ============================================================
-
 def get_plotly_template():
-
-    if st.session_state.get(
-        "dark_mode",
-        False
-    ):
+    if st.session_state.get("dark_mode", False):
         return "plotly_dark"
 
     return "plotly_white"
 
 
-# ============================================================
-# DARK MODE STATUS
-# ============================================================
-
 def is_dark_mode():
+    return st.session_state.get("dark_mode", False)
 
-    return st.session_state.get(
-        "dark_mode",
-        False
-    )
-
-
-# ============================================================
-# THEME COLORS
-# ============================================================
 
 def get_theme_colors():
-
     if is_dark_mode():
-
         return {
             "background": "#0F172A",
             "surface": "#1F2937",
