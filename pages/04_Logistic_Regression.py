@@ -1,28 +1,34 @@
 # ============================================================
 # LOGISTIC REGRESSION PAGE
+# Visual-first final version
 # ============================================================
 
-import streamlit as st
-import pandas as pd
-import plotly.express as px
 from pathlib import Path
 
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler
-from sklearn.linear_model import LogisticRegression
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import streamlit as st
+
 from sklearn.dummy import DummyClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
+    average_precision_score,
     balanced_accuracy_score,
     confusion_matrix,
+    f1_score,
+    precision_recall_curve,
+    precision_score,
+    recall_score,
     roc_auc_score,
     roc_curve,
 )
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 from components.styles import (
     apply_global_styles,
@@ -41,9 +47,9 @@ from components.icons import (
 from core.model_loader import load_logistic_model
 
 
-# ------------------------------------------------------------
+# ============================================================
 # PAGE CONFIGURATION
-# ------------------------------------------------------------
+# ============================================================
 
 st.set_page_config(
     page_title="Logistic Regression",
@@ -54,11 +60,16 @@ st.set_page_config(
 apply_global_styles()
 
 
-# ------------------------------------------------------------
+# ============================================================
 # LOAD DATA
-# ------------------------------------------------------------
+# ============================================================
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = (
+    Path(__file__)
+    .resolve()
+    .parent
+    .parent
+)
 
 DATA_PATH = (
     BASE_DIR
@@ -69,15 +80,18 @@ DATA_PATH = (
 
 @st.cache_data
 def load_data():
-    return pd.read_csv(DATA_PATH)
+
+    return pd.read_csv(
+        DATA_PATH
+    )
 
 
 df = load_data()
 
 
-# ------------------------------------------------------------
-# THEME SETTINGS
-# ------------------------------------------------------------
+# ============================================================
+# THEME
+# ============================================================
 
 plotly_template = get_plotly_template()
 theme_colors = get_theme_colors()
@@ -90,9 +104,72 @@ chart_border = theme_colors["border"]
 accent = theme_colors["accent"]
 
 
-# ------------------------------------------------------------
-# COMMON PLOTLY STYLE
-# ------------------------------------------------------------
+# ============================================================
+# PAGE CSS
+# ============================================================
+
+st.markdown(
+    f"""
+    <style>
+
+    .block-container {{
+        padding-top: 1.8rem;
+        padding-bottom: 2rem;
+    }}
+
+    .logistic-table-container {{
+        overflow-x:auto;
+        border:1px solid {chart_border};
+        border-radius:10px;
+        background:{surface};
+        margin-bottom:14px;
+    }}
+
+    .logistic-table {{
+        width:100%;
+        border-collapse:collapse;
+        font-size:13px;
+        color:{chart_text};
+        background:{surface};
+    }}
+
+    .logistic-table thead th {{
+        text-align:left;
+        padding:10px 11px;
+        font-weight:600;
+        color:{chart_muted};
+        background:{surface};
+        border-bottom:1px solid {chart_border};
+        white-space:nowrap;
+    }}
+
+    .logistic-table tbody td {{
+        padding:9px 11px;
+        color:{chart_text};
+        background:{surface};
+        border-bottom:1px solid {chart_border};
+        white-space:nowrap;
+    }}
+
+    .logistic-table tbody tr:last-child td {{
+        border-bottom:none;
+    }}
+
+    .metric-note {{
+        color:{chart_muted};
+        font-size:11px;
+        line-height:1.45;
+    }}
+
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ============================================================
+# CHART STYLE
+# ============================================================
 
 def style_chart(fig):
 
@@ -108,26 +185,23 @@ def style_chart(fig):
     fig.update_xaxes(
         color=chart_text,
         gridcolor=chart_border,
-        zerolinecolor=chart_border
+        zerolinecolor=chart_border,
     )
 
     fig.update_yaxes(
         color=chart_text,
         gridcolor=chart_border,
-        zerolinecolor=chart_border
+        zerolinecolor=chart_border,
     )
 
     return fig
 
 
-# ------------------------------------------------------------
-# THEME-AWARE HTML TABLE
-# ------------------------------------------------------------
+# ============================================================
+# TABLE
+# ============================================================
 
-def show_theme_table(
-    table_df,
-    max_height=None
-):
+def show_theme_table(table_df):
 
     clean_df = (
         table_df
@@ -139,78 +213,21 @@ def show_theme_table(
         index=False,
         escape=True,
         border=0,
-        classes="logistic-table"
+        classes="logistic-table",
     )
-
-    if max_height is not None:
-
-        container_style = (
-            f"max-height:{max_height}px;"
-            "overflow:auto;"
-        )
-
-    else:
-
-        container_style = (
-            "overflow-x:auto;"
-        )
-
-    html = f"""
-    <style>
-
-    .logistic-table-container {{
-        {container_style}
-        border: 1px solid {chart_border};
-        border-radius: 10px;
-        background: {surface};
-        margin-bottom: 14px;
-    }}
-
-    .logistic-table {{
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 13px;
-        color: {chart_text};
-        background: {surface};
-    }}
-
-    .logistic-table thead th {{
-        text-align: left;
-        padding: 10px 11px;
-        font-weight: 600;
-        color: {chart_muted};
-        background: {surface};
-        border-bottom: 1px solid {chart_border};
-        white-space: nowrap;
-    }}
-
-    .logistic-table tbody td {{
-        padding: 9px 11px;
-        color: {chart_text};
-        background: {surface};
-        border-bottom: 1px solid {chart_border};
-        white-space: nowrap;
-    }}
-
-    .logistic-table tbody tr:last-child td {{
-        border-bottom: none;
-    }}
-
-    </style>
-
-    <div class="logistic-table-container">
-        {table_html}
-    </div>
-    """
 
     st.html(
-        html
+        f"""
+        <div class="logistic-table-container">
+            {table_html}
+        </div>
+        """
     )
 
 
-# ------------------------------------------------------------
+# ============================================================
 # MODEL VARIABLES
-# ------------------------------------------------------------
+# ============================================================
 
 features = [
     "previous_exam_score",
@@ -224,28 +241,62 @@ features = [
 target = "pass_status"
 
 
-# ------------------------------------------------------------
-# PREPARE DATA AND EVALUATE MODELS
-# ------------------------------------------------------------
+feature_labels = {
+    "previous_exam_score":
+        "Previous Exam Score",
+
+    "previous_gpa":
+        "Previous GPA",
+
+    "attendance_percentage":
+        "Attendance",
+
+    "assignment_completion_rate":
+        "Assignment Completion",
+
+    "study_hours_per_day":
+        "Study Hours",
+
+    "practice_tests_completed":
+        "Practice Tests",
+}
+
+
+# ============================================================
+# MODEL RESOURCE
+# ============================================================
+
+@st.cache_resource
+def get_logistic_model():
+
+    return load_logistic_model()
+
+
+# ============================================================
+# PREPARE DATA + EVALUATE MODELS
+# ============================================================
 
 @st.cache_data
 def prepare_classification_results():
 
-    # --------------------------------------------------------
-    # INPUT FEATURES AND TARGET
-    # --------------------------------------------------------
+    X = df[
+        features
+    ].copy()
 
-    X = df[features].copy()
+    y = (
+        df[
+            target
+        ]
+        .astype(str)
+    )
 
-    # Keep labels as text so they match the saved model.
-    y = df[target].astype(str)
 
-
-    # --------------------------------------------------------
-    # TRAIN / TEST SPLIT
-    # --------------------------------------------------------
-
-    X_train, X_test, y_train, y_test = train_test_split(
+    (
+        X_train,
+        X_test,
+        y_train,
+        y_test,
+    ) = train_test_split(
         X,
         y,
         test_size=0.20,
@@ -255,14 +306,20 @@ def prepare_classification_results():
 
 
     # --------------------------------------------------------
-    # SAVED BALANCED LOGISTIC REGRESSION MODEL
+    # SAVED BALANCED MODEL
     # --------------------------------------------------------
 
-    balanced_model = load_logistic_model()
-
-    y_pred_balanced = balanced_model.predict(
-        X_test
+    balanced_model = (
+        get_logistic_model()
     )
+
+
+    y_pred_balanced = (
+        balanced_model.predict(
+            X_test
+        )
+    )
+
 
     probability_matrix = (
         balanced_model.predict_proba(
@@ -271,19 +328,19 @@ def prepare_classification_results():
     )
 
 
-    # --------------------------------------------------------
-    # IDENTIFY PASS PROBABILITY COLUMN
-    # --------------------------------------------------------
-
     balanced_classes = list(
-        balanced_model.named_steps[
-            "model"
-        ].classes_
+        balanced_model
+        .named_steps["model"]
+        .classes_
     )
 
-    pass_index = balanced_classes.index(
-        "Pass"
+
+    pass_index = (
+        balanced_classes.index(
+            "Pass"
+        )
     )
+
 
     y_prob_balanced = (
         probability_matrix[
@@ -294,7 +351,7 @@ def prepare_classification_results():
 
 
     # --------------------------------------------------------
-    # STANDARD LOGISTIC REGRESSION
+    # STANDARD LOGISTIC
     # --------------------------------------------------------
 
     standard_model = Pipeline(
@@ -325,31 +382,39 @@ def prepare_classification_results():
         ]
     )
 
+
     standard_model.fit(
         X_train,
         y_train,
     )
 
-    y_pred_standard = standard_model.predict(
-        X_test
+
+    y_pred_standard = (
+        standard_model.predict(
+            X_test
+        )
     )
 
 
     # --------------------------------------------------------
-    # DUMMY BASELINE
+    # DUMMY
     # --------------------------------------------------------
 
     dummy_model = DummyClassifier(
         strategy="most_frequent"
     )
 
+
     dummy_model.fit(
         X_train,
         y_train,
     )
 
-    y_pred_dummy = dummy_model.predict(
-        X_test
+
+    y_pred_dummy = (
+        dummy_model.predict(
+            X_test
+        )
     )
 
 
@@ -401,23 +466,27 @@ def prepare_classification_results():
         }
 
 
-    # --------------------------------------------------------
-    # MODEL METRICS
-    # --------------------------------------------------------
-
-    balanced_metrics = get_metrics(
-        y_test,
-        y_pred_balanced,
+    balanced_metrics = (
+        get_metrics(
+            y_test,
+            y_pred_balanced,
+        )
     )
 
-    standard_metrics = get_metrics(
-        y_test,
-        y_pred_standard,
+
+    standard_metrics = (
+        get_metrics(
+            y_test,
+            y_pred_standard,
+        )
     )
 
-    dummy_metrics = get_metrics(
-        y_test,
-        y_pred_dummy,
+
+    dummy_metrics = (
+        get_metrics(
+            y_test,
+            y_pred_dummy,
+        )
     )
 
 
@@ -435,48 +504,144 @@ def prepare_classification_results():
     )
 
 
+    tn, fp, fn, tp = (
+        cm_balanced.ravel()
+    )
+
+
+    fail_recall = (
+        tn
+        / (
+            tn
+            + fp
+        )
+        if (
+            tn + fp
+        ) > 0
+        else 0
+    )
+
+
+    pass_recall = (
+        tp
+        / (
+            tp
+            + fn
+        )
+        if (
+            tp + fn
+        ) > 0
+        else 0
+    )
+
+
     # --------------------------------------------------------
-    # ROC / AUC
+    # ROC
     # --------------------------------------------------------
 
     y_test_binary = (
-        y_test == "Pass"
-    ).astype(int)
+        y_test
+        .eq("Pass")
+        .astype(int)
+    )
+
 
     auc = roc_auc_score(
         y_test_binary,
         y_prob_balanced,
     )
 
-    fpr, tpr, thresholds = roc_curve(
+
+    fpr, tpr, _ = roc_curve(
         y_test_binary,
         y_prob_balanced,
     )
 
 
     # --------------------------------------------------------
-    # MODEL COMPARISON TABLE
+    # PRECISION-RECALL
+    # --------------------------------------------------------
+
+    (
+        pr_precision,
+        pr_recall,
+        _,
+    ) = precision_recall_curve(
+        y_test_binary,
+        y_prob_balanced,
+    )
+
+
+    average_precision = (
+        average_precision_score(
+            y_test_binary,
+            y_prob_balanced,
+        )
+    )
+
+
+    # --------------------------------------------------------
+    # COMPARISON
     # --------------------------------------------------------
 
     comparison_df = pd.DataFrame(
         {
             "Model": [
                 "Dummy Baseline",
-                "Standard Logistic Regression",
-                "Balanced Logistic Regression",
+                "Standard Logistic",
+                "Balanced Logistic",
             ],
 
             "Accuracy": [
-                dummy_metrics["Accuracy"],
-                standard_metrics["Accuracy"],
-                balanced_metrics["Accuracy"],
+                dummy_metrics[
+                    "Accuracy"
+                ],
+                standard_metrics[
+                    "Accuracy"
+                ],
+                balanced_metrics[
+                    "Accuracy"
+                ],
             ],
 
             "Balanced Accuracy": [
-                dummy_metrics["Balanced Accuracy"],
-                standard_metrics["Balanced Accuracy"],
-                balanced_metrics["Balanced Accuracy"],
+                dummy_metrics[
+                    "Balanced Accuracy"
+                ],
+                standard_metrics[
+                    "Balanced Accuracy"
+                ],
+                balanced_metrics[
+                    "Balanced Accuracy"
+                ],
             ],
+        }
+    )
+
+
+    comparison_df[
+        "Accuracy Gap"
+    ] = (
+        comparison_df[
+            "Accuracy"
+        ]
+        - comparison_df[
+            "Balanced Accuracy"
+        ]
+    )
+
+
+    # --------------------------------------------------------
+    # PROBABILITY DATA
+    # --------------------------------------------------------
+
+    probability_df = pd.DataFrame(
+        {
+            "Pass Probability":
+                y_prob_balanced,
+
+            "Actual Outcome":
+                y_test.values,
         }
     )
 
@@ -486,10 +651,16 @@ def prepare_classification_results():
         standard_metrics,
         dummy_metrics,
         cm_balanced,
+        fail_recall,
+        pass_recall,
         auc,
         fpr,
         tpr,
+        pr_precision,
+        pr_recall,
+        average_precision,
         comparison_df,
+        probability_df,
         len(X_train),
         len(X_test),
     )
@@ -500,18 +671,24 @@ def prepare_classification_results():
     standard_metrics,
     dummy_metrics,
     cm_balanced,
+    fail_recall,
+    pass_recall,
     auc,
     fpr,
     tpr,
+    pr_precision,
+    pr_recall,
+    average_precision,
     comparison_df,
+    probability_df,
     train_n,
     test_n,
 ) = prepare_classification_results()
 
 
-# ------------------------------------------------------------
+# ============================================================
 # HEADER
-# ------------------------------------------------------------
+# ============================================================
 
 page_title(
     "target",
@@ -521,9 +698,9 @@ page_title(
 )
 
 
-# ------------------------------------------------------------
+# ============================================================
 # MODEL OVERVIEW
-# ------------------------------------------------------------
+# ============================================================
 
 section_title(
     "database",
@@ -531,7 +708,9 @@ section_title(
 )
 
 
-o1, o2, o3, o4 = st.columns(4)
+o1, o2, o3, o4 = (
+    st.columns(4)
+)
 
 
 o1.metric(
@@ -549,21 +728,15 @@ o3.metric(
     len(features),
 )
 
-
-with o4:
-
-    st.caption(
-        "Final Model"
-    )
-
-    st.markdown(
-        "#### Balanced Logistic Regression"
-    )
+o4.metric(
+    "Final Model",
+    "Balanced",
+)
 
 
-# ------------------------------------------------------------
+# ============================================================
 # CLASS DISTRIBUTION
-# ------------------------------------------------------------
+# ============================================================
 
 section_title(
     "chart",
@@ -572,7 +745,9 @@ section_title(
 
 
 class_counts = (
-    df["pass_status"]
+    df[
+        "pass_status"
+    ]
     .value_counts()
 )
 
@@ -592,34 +767,45 @@ fail_count = int(
 )
 
 
-class_col1, class_col2 = st.columns(
-    [1, 1.2]
+class_left, class_right = (
+    st.columns(
+        [1, 1.2]
+    )
 )
 
 
-with class_col1:
+with class_left:
 
-    m1, m2 = st.columns(2)
+    c1, c2 = (
+        st.columns(2)
+    )
 
-    m1.metric(
+
+    c1.metric(
         "Pass",
         f"{pass_count:,}",
-        f"{pass_count / len(df) * 100:.1f}%",
+        (
+            f"{pass_count / len(df) * 100:.1f}%"
+        ),
     )
 
-    m2.metric(
+
+    c2.metric(
         "Fail",
         f"{fail_count:,}",
-        f"{fail_count / len(df) * 100:.1f}%",
+        (
+            f"{fail_count / len(df) * 100:.1f}%"
+        ),
     )
+
 
     st.caption(
-        "Pass is the majority class, so ordinary accuracy "
-        "can give an overly optimistic view of performance."
+        "The majority class is Pass, so ordinary accuracy "
+        "should not be interpreted by itself."
     )
 
 
-with class_col2:
+with class_right:
 
     class_df = pd.DataFrame(
         {
@@ -627,6 +813,7 @@ with class_col2:
                 "Pass",
                 "Fail",
             ],
+
             "Students": [
                 pass_count,
                 fail_count,
@@ -639,7 +826,7 @@ with class_col2:
         class_df,
         names="Status",
         values="Students",
-        hole=0.62,
+        hole=0.64,
     )
 
 
@@ -652,7 +839,7 @@ with class_col2:
     fig_class.update_layout(
         template=plotly_template,
 
-        height=260,
+        height=250,
 
         margin=dict(
             l=10,
@@ -663,8 +850,13 @@ with class_col2:
 
         showlegend=False,
 
-        paper_bgcolor=chart_background,
-        plot_bgcolor=chart_background,
+        paper_bgcolor=(
+            chart_background
+        ),
+
+        plot_bgcolor=(
+            chart_background
+        ),
 
         font=dict(
             color=chart_text
@@ -676,23 +868,16 @@ with class_col2:
         fig_class,
         width="stretch",
         theme=None,
-
         config={
-            "displayModeBar": False
+            "displayModeBar":
+                False
         },
     )
 
 
-st.info(
-    "Because the classes are imbalanced, Balanced Accuracy is "
-    "especially useful because it gives equal importance to "
-    "performance on both Pass and Fail students."
-)
-
-
-# ------------------------------------------------------------
-# FINAL MODEL PERFORMANCE
-# ------------------------------------------------------------
+# ============================================================
+# PERFORMANCE DASHBOARD
+# ============================================================
 
 section_title(
     "target",
@@ -700,106 +885,325 @@ section_title(
 )
 
 
-metric_cols = st.columns(5)
+metric_cols = (
+    st.columns(6)
+)
 
 
-metric_names = [
-    "Accuracy",
-    "Precision",
-    "Recall",
-    "F1 Score",
-    "Balanced Accuracy",
+metric_values = [
+    (
+        "Accuracy",
+        balanced_metrics[
+            "Accuracy"
+        ] * 100,
+    ),
+    (
+        "Precision",
+        balanced_metrics[
+            "Precision"
+        ] * 100,
+    ),
+    (
+        "Recall",
+        balanced_metrics[
+            "Recall"
+        ] * 100,
+    ),
+    (
+        "F1",
+        balanced_metrics[
+            "F1 Score"
+        ] * 100,
+    ),
+    (
+        "Balanced Acc.",
+        balanced_metrics[
+            "Balanced Accuracy"
+        ] * 100,
+    ),
+    (
+        "AUC",
+        auc * 100,
+    ),
 ]
 
 
-metric_descriptions = {
-
-    "Accuracy":
-        "Overall percentage of correct predictions.",
-
-    "Precision":
-        "How reliable positive Pass predictions are.",
-
-    "Recall":
-        "How many actual Pass students are identified.",
-
-    "F1 Score":
-        "Balance between precision and recall.",
-
-    "Balanced Accuracy":
-        "Average performance across both classes.",
-}
-
-
-for col, metric_name in zip(
+for col, (
+    metric_name,
+    metric_value,
+) in zip(
     metric_cols,
-    metric_names,
+    metric_values,
 ):
 
     with col:
 
-        with st.container(
-            border=True
-        ):
-
-            st.metric(
-                metric_name,
-                f"{balanced_metrics[metric_name] * 100:.1f}%",
-            )
-
-            st.caption(
-                metric_descriptions[
-                    metric_name
-                ]
-            )
+        st.metric(
+            metric_name,
+            f"{metric_value:.1f}%",
+        )
 
 
-# ------------------------------------------------------------
-# PERFORMANCE SUMMARY
-# ------------------------------------------------------------
+# ============================================================
+# METRIC PROFILE + RADAR
+# ============================================================
 
-summary1, summary2, summary3 = (
-    st.columns(3)
+profile_left, profile_right = (
+    st.columns(
+        [1.4, 1]
+    )
 )
 
 
-with summary1:
+with profile_left:
 
-    icon_card(
-        "check",
-        "Overall Accuracy",
-        f"{balanced_metrics['Accuracy'] * 100:.1f}% "
-        "of test predictions are correct.",
+    section_title(
+        "chart",
+        "Metric Profile",
     )
 
 
-with summary2:
+    metric_profile_df = pd.DataFrame(
+        {
+            "Metric": [
+                "Accuracy",
+                "Precision",
+                "Recall",
+                "F1",
+                "Balanced Accuracy",
+                "AUC",
+            ],
 
-    icon_card(
-        "scale",
-        "Balanced Accuracy",
-        f"{balanced_metrics['Balanced Accuracy'] * 100:.1f}% "
-        "when both classes are weighted equally.",
+            "Score": [
+                balanced_metrics[
+                    "Accuracy"
+                ] * 100,
+
+                balanced_metrics[
+                    "Precision"
+                ] * 100,
+
+                balanced_metrics[
+                    "Recall"
+                ] * 100,
+
+                balanced_metrics[
+                    "F1 Score"
+                ] * 100,
+
+                balanced_metrics[
+                    "Balanced Accuracy"
+                ] * 100,
+
+                auc * 100,
+            ],
+        }
     )
 
 
-with summary3:
-
-    icon_card(
-        "target",
-        "ROC AUC",
-        f"AUC = {auc:.3f}, indicating useful separation "
-        "between Pass and Fail students.",
+    fig_metric_profile = px.bar(
+        metric_profile_df,
+        x="Score",
+        y="Metric",
+        orientation="h",
+        text="Score",
     )
 
 
-# ------------------------------------------------------------
+    fig_metric_profile.update_traces(
+        marker_color=accent,
+        texttemplate="%{text:.1f}%",
+        textposition="outside",
+    )
+
+
+    fig_metric_profile.update_layout(
+        height=375,
+
+        margin=dict(
+            l=20,
+            r=65,
+            t=10,
+            b=20,
+        ),
+
+        xaxis=dict(
+            range=[
+                0,
+                100,
+            ],
+            title="Score (%)",
+            ticksuffix="%",
+        ),
+
+        yaxis_title="",
+
+        showlegend=False,
+    )
+
+
+    style_chart(
+        fig_metric_profile
+    )
+
+
+    st.plotly_chart(
+        fig_metric_profile,
+        width="stretch",
+        theme=None,
+        config={
+            "displayModeBar":
+                False
+        },
+    )
+
+
+with profile_right:
+
+    section_title(
+        "chart",
+        "Metric Balance",
+    )
+
+
+    radar_labels = [
+        "Accuracy",
+        "Precision",
+        "Recall",
+        "F1",
+        "Balanced Acc.",
+        "AUC",
+    ]
+
+
+    radar_values = [
+        balanced_metrics[
+            "Accuracy"
+        ] * 100,
+
+        balanced_metrics[
+            "Precision"
+        ] * 100,
+
+        balanced_metrics[
+            "Recall"
+        ] * 100,
+
+        balanced_metrics[
+            "F1 Score"
+        ] * 100,
+
+        balanced_metrics[
+            "Balanced Accuracy"
+        ] * 100,
+
+        auc * 100,
+    ]
+
+
+    fig_radar = go.Figure()
+
+
+    fig_radar.add_trace(
+        go.Scatterpolar(
+            r=(
+                radar_values
+                + [
+                    radar_values[0]
+                ]
+            ),
+
+            theta=(
+                radar_labels
+                + [
+                    radar_labels[0]
+                ]
+            ),
+
+            fill="toself",
+
+            line=dict(
+                color=accent
+            ),
+
+            name=(
+                "Balanced Logistic"
+            ),
+        )
+    )
+
+
+    fig_radar.update_layout(
+        template=plotly_template,
+
+        height=375,
+
+        margin=dict(
+            l=45,
+            r=45,
+            t=20,
+            b=20,
+        ),
+
+        polar=dict(
+            bgcolor=(
+                chart_background
+            ),
+
+            radialaxis=dict(
+                visible=True,
+                range=[
+                    0,
+                    100,
+                ],
+                ticksuffix="%",
+                gridcolor=(
+                    chart_border
+                ),
+            ),
+
+            angularaxis=dict(
+                gridcolor=(
+                    chart_border
+                ),
+            ),
+        ),
+
+        showlegend=False,
+
+        paper_bgcolor=(
+            chart_background
+        ),
+
+        font=dict(
+            color=chart_text
+        ),
+    )
+
+
+    st.plotly_chart(
+        fig_radar,
+        width="stretch",
+        theme=None,
+        config={
+            "displayModeBar":
+                False
+        },
+    )
+
+
+# ============================================================
 # CONFUSION MATRIX
-# ------------------------------------------------------------
+# ============================================================
 
 section_title(
     "chart",
     "Confusion Matrix",
+)
+
+
+tn, fp, fn, tp = (
+    cm_balanced.ravel()
 )
 
 
@@ -829,7 +1233,7 @@ fig_cm = px.imshow(
 fig_cm.update_layout(
     template=plotly_template,
 
-    height=380,
+    height=330,
 
     margin=dict(
         l=20,
@@ -838,8 +1242,13 @@ fig_cm.update_layout(
         b=20,
     ),
 
-    paper_bgcolor=chart_background,
-    plot_bgcolor=chart_background,
+    paper_bgcolor=(
+        chart_background
+    ),
+
+    plot_bgcolor=(
+        chart_background
+    ),
 
     font=dict(
         color=chart_text
@@ -864,17 +1273,16 @@ st.plotly_chart(
     fig_cm,
     width="stretch",
     theme=None,
-
     config={
-        "displayModeBar": False
+        "displayModeBar":
+            False
     },
 )
 
 
-tn, fp, fn, tp = (
-    cm_balanced.ravel()
-)
-
+# ============================================================
+# CONFUSION MATRIX METRICS
+# ============================================================
 
 conf1, conf2, conf3, conf4 = (
     st.columns(4)
@@ -882,35 +1290,144 @@ conf1, conf2, conf3, conf4 = (
 
 
 conf1.metric(
-    "Correct Fails",
+    "True Fail",
     f"{tn:,}",
 )
 
 conf2.metric(
-    "Fail → Pass",
+    "False Pass",
     f"{fp:,}",
 )
 
 conf3.metric(
-    "Pass → Fail",
+    "False Fail",
     f"{fn:,}",
 )
 
 conf4.metric(
-    "Correct Passes",
+    "True Pass",
     f"{tp:,}",
 )
 
 
-st.caption(
-    "The balanced classifier places more emphasis on identifying "
-    "the minority Fail class than an ordinary Logistic Regression model."
+recall1, recall2, recall3 = (
+    st.columns(3)
 )
 
 
-# ------------------------------------------------------------
-# MODEL COMPARISON
-# ------------------------------------------------------------
+recall1.metric(
+    "Fail Recall",
+    f"{fail_recall * 100:.1f}%",
+)
+
+recall2.metric(
+    "Pass Recall",
+    f"{pass_recall * 100:.1f}%",
+)
+
+recall3.metric(
+    "Balanced Accuracy",
+    (
+        f"{balanced_metrics['Balanced Accuracy'] * 100:.1f}%"
+    ),
+)
+
+
+st.caption(
+    "Balanced Accuracy is the average of recall across both outcome classes."
+)
+
+
+# ============================================================
+# PREDICTED PROBABILITY DISTRIBUTION
+# ============================================================
+
+section_title(
+    "chart",
+    "Predicted Pass Probability Distribution",
+)
+
+
+fig_probability = px.histogram(
+    probability_df,
+
+    x="Pass Probability",
+
+    color="Actual Outcome",
+
+    nbins=45,
+
+    barmode="overlay",
+
+    opacity=0.60,
+
+    histnorm=(
+        "probability density"
+    ),
+)
+
+
+fig_probability.add_vline(
+    x=0.50,
+    line_dash="dash",
+    line_color=chart_muted,
+)
+
+
+fig_probability.update_layout(
+    height=370,
+
+    margin=dict(
+        l=20,
+        r=20,
+        t=15,
+        b=30,
+    ),
+
+    xaxis_title=(
+        "Predicted Pass Probability"
+    ),
+
+    yaxis_title=(
+        "Probability Density"
+    ),
+
+    legend_title=(
+        "Actual Outcome"
+    ),
+)
+
+
+fig_probability.update_xaxes(
+    tickformat=".0%"
+)
+
+
+style_chart(
+    fig_probability
+)
+
+
+st.plotly_chart(
+    fig_probability,
+    width="stretch",
+    theme=None,
+    config={
+        "displayModeBar":
+            False
+    },
+)
+
+
+st.caption(
+    "Better class separation appears when actual Pass students receive "
+    "higher probabilities and actual Fail students receive lower probabilities."
+)
+
+
+# ============================================================
+# CLASSIFIER COMPARISON
+# ============================================================
 
 section_title(
     "scale",
@@ -919,46 +1436,34 @@ section_title(
 
 
 display_comparison = (
-    comparison_df
+    comparison_df[
+        [
+            "Model",
+            "Accuracy",
+            "Balanced Accuracy",
+        ]
+    ]
     .copy()
 )
 
 
 display_comparison[
     "Accuracy"
-] = (
-    display_comparison[
-        "Accuracy"
-    ] * 100
-).round(1)
-
-
-display_comparison[
-    "Balanced Accuracy"
-] = (
-    display_comparison[
-        "Balanced Accuracy"
-    ] * 100
-).round(1)
-
-
-display_comparison[
+] = display_comparison[
     "Accuracy"
-] = (
-    display_comparison[
-        "Accuracy"
-    ].astype(str)
-    + "%"
+].map(
+    lambda value:
+        f"{value * 100:.1f}%"
 )
 
 
 display_comparison[
     "Balanced Accuracy"
-] = (
-    display_comparison[
-        "Balanced Accuracy"
-    ].astype(str)
-    + "%"
+] = display_comparison[
+    "Balanced Accuracy"
+].map(
+    lambda value:
+        f"{value * 100:.1f}%"
 )
 
 
@@ -967,16 +1472,18 @@ show_theme_table(
 )
 
 
-compare_long = comparison_df.melt(
-    id_vars="Model",
+compare_long = (
+    comparison_df.melt(
+        id_vars="Model",
 
-    value_vars=[
-        "Accuracy",
-        "Balanced Accuracy",
-    ],
+        value_vars=[
+            "Accuracy",
+            "Balanced Accuracy",
+        ],
 
-    var_name="Metric",
-    value_name="Score",
+        var_name="Metric",
+        value_name="Score",
+    )
 )
 
 
@@ -986,11 +1493,18 @@ fig_compare = px.bar(
     y="Score",
     color="Metric",
     barmode="group",
+    text="Score",
+)
+
+
+fig_compare.update_traces(
+    texttemplate="%{text:.1%}",
+    textposition="outside",
 )
 
 
 fig_compare.update_layout(
-    height=380,
+    height=390,
 
     margin=dict(
         l=20,
@@ -999,10 +1513,16 @@ fig_compare.update_layout(
         b=20,
     ),
 
-    yaxis_title="Score",
     xaxis_title="",
 
-    yaxis_tickformat=".0%",
+    yaxis=dict(
+        title="Score",
+        range=[
+            0,
+            1,
+        ],
+        tickformat=".0%",
+    ),
 
     legend_title="",
 )
@@ -1017,23 +1537,113 @@ st.plotly_chart(
     fig_compare,
     width="stretch",
     theme=None,
-
     config={
-        "displayModeBar": False
+        "displayModeBar":
+            False
     },
 )
 
 
-st.warning(
-    "The Dummy Baseline appears strong on ordinary accuracy because "
-    "most students pass. Its Balanced Accuracy is only 50%, showing "
-    "why accuracy alone is misleading for this imbalanced dataset."
+# ============================================================
+# ACCURACY GAP
+# ============================================================
+
+section_title(
+    "chart",
+    "Accuracy Gap",
 )
 
 
-# ------------------------------------------------------------
+gap_df = (
+    comparison_df[
+        [
+            "Model",
+            "Accuracy Gap",
+        ]
+    ]
+    .copy()
+)
+
+
+gap_df[
+    "Accuracy Gap"
+] = (
+    gap_df[
+        "Accuracy Gap"
+    ]
+    * 100
+)
+
+
+fig_gap = px.bar(
+    gap_df,
+    x="Accuracy Gap",
+    y="Model",
+    orientation="h",
+    text="Accuracy Gap",
+)
+
+
+fig_gap.update_traces(
+    marker_color=accent,
+    texttemplate="%{text:+.1f} pts",
+    textposition="outside",
+)
+
+
+fig_gap.add_vline(
+    x=0,
+    line_dash="dash",
+    line_color=chart_muted,
+)
+
+
+fig_gap.update_layout(
+    height=280,
+
+    margin=dict(
+        l=20,
+        r=85,
+        t=10,
+        b=20,
+    ),
+
+    xaxis_title=(
+        "Accuracy − Balanced Accuracy "
+        "(percentage points)"
+    ),
+
+    yaxis_title="",
+
+    showlegend=False,
+)
+
+
+style_chart(
+    fig_gap
+)
+
+
+st.plotly_chart(
+    fig_gap,
+    width="stretch",
+    theme=None,
+    config={
+        "displayModeBar":
+            False
+    },
+)
+
+
+st.caption(
+    "A large positive gap suggests that ordinary accuracy is being "
+    "boosted by the majority class. The balanced model has a much smaller gap."
+)
+
+
+# ============================================================
 # BALANCED ACCURACY RANKING
-# ------------------------------------------------------------
+# ============================================================
 
 section_title(
     "chart",
@@ -1081,10 +1691,18 @@ fig_rank.update_layout(
         b=20,
     ),
 
-    xaxis_title="Balanced Accuracy",
-    yaxis_title="",
+    xaxis=dict(
+        title=(
+            "Balanced Accuracy"
+        ),
+        range=[
+            0,
+            1,
+        ],
+        tickformat=".0%",
+    ),
 
-    xaxis_tickformat=".0%",
+    yaxis_title="",
 
     showlegend=False,
 )
@@ -1099,227 +1717,459 @@ st.plotly_chart(
     fig_rank,
     width="stretch",
     theme=None,
-
     config={
-        "displayModeBar": False
+        "displayModeBar":
+            False
     },
 )
 
 
-# ------------------------------------------------------------
-# ROC CURVE
-# ------------------------------------------------------------
+# ============================================================
+# ROC + PRECISION-RECALL
+# ============================================================
 
 section_title(
     "trending",
-    "ROC Curve",
+    "Threshold-Independent Evaluation",
 )
 
 
-roc_df = pd.DataFrame(
-    {
-        "False Positive Rate":
-            fpr,
+roc_col, pr_col = (
+    st.columns(2)
+)
 
-        "True Positive Rate":
-            tpr,
+
+# ------------------------------------------------------------
+# ROC
+# ------------------------------------------------------------
+
+with roc_col:
+
+    roc_df = pd.DataFrame(
+        {
+            "False Positive Rate":
+                fpr,
+
+            "True Positive Rate":
+                tpr,
+        }
+    )
+
+
+    fig_roc = px.line(
+        roc_df,
+        x="False Positive Rate",
+        y="True Positive Rate",
+    )
+
+
+    fig_roc.update_traces(
+        line=dict(
+            color=accent,
+            width=3,
+        )
+    )
+
+
+    fig_roc.add_shape(
+        type="line",
+
+        x0=0,
+        y0=0,
+
+        x1=1,
+        y1=1,
+
+        line=dict(
+            color=chart_muted,
+            dash="dash",
+            width=2,
+        ),
+    )
+
+
+    fig_roc.update_layout(
+        height=360,
+
+        title=dict(
+            text=(
+                f"ROC Curve · AUC {auc:.3f}"
+            ),
+            font=dict(
+                size=14
+            ),
+        ),
+
+        margin=dict(
+            l=20,
+            r=20,
+            t=40,
+            b=25,
+        ),
+
+        xaxis_title=(
+            "False Positive Rate"
+        ),
+
+        yaxis_title=(
+            "True Positive Rate"
+        ),
+    )
+
+
+    fig_roc.update_xaxes(
+        range=[
+            0,
+            1,
+        ]
+    )
+
+
+    fig_roc.update_yaxes(
+        range=[
+            0,
+            1,
+        ]
+    )
+
+
+    style_chart(
+        fig_roc
+    )
+
+
+    st.plotly_chart(
+        fig_roc,
+        width="stretch",
+        theme=None,
+        config={
+            "displayModeBar":
+                False
+        },
+    )
+
+
+# ------------------------------------------------------------
+# PRECISION-RECALL
+# ------------------------------------------------------------
+
+with pr_col:
+
+    pr_df = pd.DataFrame(
+        {
+            "Recall":
+                pr_recall,
+
+            "Precision":
+                pr_precision,
+        }
+    )
+
+
+    fig_pr = px.line(
+        pr_df,
+        x="Recall",
+        y="Precision",
+    )
+
+
+    fig_pr.update_traces(
+        line=dict(
+            color=accent,
+            width=3,
+        )
+    )
+
+
+    fig_pr.update_layout(
+        height=360,
+
+        title=dict(
+            text=(
+                f"Precision–Recall · AP "
+                f"{average_precision:.3f}"
+            ),
+            font=dict(
+                size=14
+            ),
+        ),
+
+        margin=dict(
+            l=20,
+            r=20,
+            t=40,
+            b=25,
+        ),
+
+        xaxis_title="Recall",
+
+        yaxis_title="Precision",
+    )
+
+
+    fig_pr.update_xaxes(
+        range=[
+            0,
+            1,
+        ],
+        tickformat=".0%",
+    )
+
+
+    fig_pr.update_yaxes(
+        range=[
+            0,
+            1,
+        ],
+        tickformat=".0%",
+    )
+
+
+    style_chart(
+        fig_pr
+    )
+
+
+    st.plotly_chart(
+        fig_pr,
+        width="stretch",
+        theme=None,
+        config={
+            "displayModeBar":
+                False
+        },
+    )
+
+
+st.caption(
+    "ROC AUC summarizes class separation across thresholds. "
+    "Average Precision summarizes the precision–recall relationship."
+)
+
+
+# ============================================================
+# FEATURE INFLUENCE
+# ============================================================
+
+section_title(
+    "sliders",
+    "Feature Influence",
+)
+
+
+balanced_model = (
+    get_logistic_model()
+)
+
+
+coefficients = (
+    balanced_model
+    .named_steps["model"]
+    .coef_[0]
+)
+
+
+coefficient_df = pd.DataFrame(
+    {
+        "Feature": [
+            "Previous Exam Score",
+            "Previous GPA",
+            "Attendance",
+            "Assignment Completion",
+            "Study Hours",
+            "Practice Tests",
+        ],
+
+        "Coefficient":
+            coefficients,
     }
 )
 
 
-fig_roc = px.line(
-    roc_df,
-    x="False Positive Rate",
-    y="True Positive Rate",
+coefficient_df[
+    "Absolute Influence"
+] = (
+    coefficient_df[
+        "Coefficient"
+    ]
+    .abs()
 )
 
 
-fig_roc.update_traces(
-    line=dict(
-        color=accent,
-        width=3
+coefficient_df = (
+    coefficient_df
+    .sort_values(
+        "Absolute Influence",
+        ascending=True,
     )
 )
 
 
-fig_roc.add_shape(
-    type="line",
+positive_color = "#5FA879"
+negative_color = "#C86B6B"
 
-    x0=0,
-    y0=0,
 
-    x1=1,
-    y1=1,
+bar_colors = [
+    (
+        positive_color
+        if coefficient >= 0
+        else negative_color
+    )
+    for coefficient
+    in coefficient_df[
+        "Coefficient"
+    ]
+]
 
-    line=dict(
-        color=chart_muted,
-        dash="dash",
-        width=2,
-    ),
+
+fig_coeff = go.Figure()
+
+
+fig_coeff.add_trace(
+    go.Bar(
+        x=coefficient_df[
+            "Coefficient"
+        ],
+
+        y=coefficient_df[
+            "Feature"
+        ],
+
+        orientation="h",
+
+        marker_color=bar_colors,
+
+        text=coefficient_df[
+            "Coefficient"
+        ],
+
+        texttemplate="%{text:.2f}",
+
+        textposition="outside",
+
+        hovertemplate=(
+            "%{y}"
+            "<br>"
+            "Standardized coefficient: %{x:.3f}"
+            "<extra></extra>"
+        ),
+    )
 )
 
 
-fig_roc.update_layout(
-    height=400,
+fig_coeff.add_vline(
+    x=0,
+    line_dash="dash",
+    line_color=chart_muted,
+)
+
+
+fig_coeff.update_layout(
+    height=340,
 
     margin=dict(
         l=20,
-        r=20,
+        r=65,
         t=10,
         b=20,
     ),
 
-    xaxis_title="False Positive Rate",
-    yaxis_title="True Positive Rate",
-)
+    xaxis_title=(
+        "Standardized Logistic Coefficient"
+    ),
 
+    yaxis_title="",
 
-fig_roc.update_xaxes(
-    range=[
-        0,
-        1,
-    ]
-)
-
-
-fig_roc.update_yaxes(
-    range=[
-        0,
-        1,
-    ]
+    showlegend=False,
 )
 
 
 style_chart(
-    fig_roc
+    fig_coeff
 )
 
 
 st.plotly_chart(
-    fig_roc,
+    fig_coeff,
     width="stretch",
     theme=None,
-
     config={
-        "displayModeBar": False
+        "displayModeBar":
+            False
     },
 )
 
 
 st.caption(
-    f"AUC = {auc:.3f}. The ROC curve evaluates how well the model "
-    "separates Pass and Fail students across different probability thresholds."
+    "Positive coefficients move the model toward Pass; negative coefficients "
+    "move it toward Fail. These are model associations, not causal effects."
 )
 
 
-# ------------------------------------------------------------
-# MODEL INTERPRETATION
-# ------------------------------------------------------------
+# ============================================================
+# FINAL TAKEAWAY
+# ============================================================
 
 section_title(
     "brain",
-    "Model Interpretation",
+    "Logistic Regression Takeaway",
 )
 
 
-interpret1, interpret2, interpret3 = (
+take1, take2, take3 = (
     st.columns(3)
 )
 
 
-with interpret1:
+with take1:
 
     icon_card(
-        "target",
-        "Pass Predictions",
-        f"Precision is "
-        f"{balanced_metrics['Precision'] * 100:.1f}%, "
-        "so predicted Pass outcomes are usually correct.",
+        "database",
+        "Class Imbalance",
+        (
+            f"Pass students make up "
+            f"{pass_count / len(df) * 100:.1f}% "
+            f"of the dataset, compared with "
+            f"{fail_count / len(df) * 100:.1f}% Fail."
+        ),
     )
 
 
-with interpret2:
-
-    icon_card(
-        "check",
-        "Pass Detection",
-        f"Recall is "
-        f"{balanced_metrics['Recall'] * 100:.1f}%, "
-        "showing how many actual Pass students are identified.",
-    )
-
-
-with interpret3:
+with take2:
 
     icon_card(
         "scale",
-        "Class Balance",
-        f"Balanced Accuracy is "
-        f"{balanced_metrics['Balanced Accuracy'] * 100:.1f}%, "
-        "reflecting performance across both classes.",
+        "Balanced Performance",
+        (
+            f"Balanced Accuracy is "
+            f"{balanced_metrics['Balanced Accuracy'] * 100:.1f}%, "
+            f"with Pass Recall {pass_recall * 100:.1f}% and "
+            f"Fail Recall {fail_recall * 100:.1f}%."
+        ),
     )
 
 
-# ------------------------------------------------------------
-# WHY BALANCED MODEL
-# ------------------------------------------------------------
-
-section_title(
-    "scale",
-    "Why Use the Balanced Model?",
-)
-
-
-reason1, reason2 = st.columns(2)
-
-
-with reason1:
+with take3:
 
     icon_card(
         "check",
-        "Minority-Class Detection",
-        "Class weighting increases attention to failing students, "
-        "who form the smaller outcome group.",
-    )
-
-
-with reason2:
-
-    icon_card(
-        "scale",
-        "More Balanced Evaluation",
-        "The model sacrifices some ordinary accuracy in exchange "
-        "for stronger performance across both classes.",
+        "Final Selection",
+        (
+            "Balanced Logistic Regression is selected because it provides "
+            "the strongest performance across both classes."
+        ),
     )
 
 
 st.success(
-    "Balanced Logistic Regression is used in the final application "
-    "because it provides the strongest Balanced Accuracy and avoids "
-    "favoring only the majority Pass class."
+    "Balanced Logistic Regression is the final classifier because it "
+    "handles the imbalanced Pass / Fail outcome more evenly than the "
+    "Dummy baseline or Standard Logistic Regression."
 )
 
 
-# ------------------------------------------------------------
-# CONCLUSION
-# ------------------------------------------------------------
-
-section_title(
-    "check",
-    "Conclusion",
-)
-
-
-st.caption(
-    "Balanced Logistic Regression provides both a Pass / Fail "
-    "classification and a probability estimate. Its stronger "
-    "performance across both outcome classes makes it the preferred "
-    "classifier for the final application."
-)
-
-
-# ------------------------------------------------------------
+# ============================================================
 # FOOTER
-# ------------------------------------------------------------
+# ============================================================
 
 show_footer()
