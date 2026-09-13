@@ -1,14 +1,23 @@
 # ============================================================
 # MODEL COMPARISON PAGE
 # Visual-first final version
+# + Fairness / Subgroup Model Audit
 # ============================================================
 
+from pathlib import Path
 import html
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+
+from sklearn.metrics import (
+    confusion_matrix,
+    mean_absolute_error,
+)
+from sklearn.model_selection import train_test_split
 
 from components.styles import (
     apply_global_styles,
@@ -22,6 +31,11 @@ from components.icons import (
     page_title,
     section_title,
     icon_card,
+)
+
+from core.model_loader import (
+    load_linear_model,
+    load_logistic_model,
 )
 
 
@@ -39,6 +53,32 @@ apply_global_styles()
 
 
 # ============================================================
+# PATHS + DATA
+# ============================================================
+
+BASE_DIR = (
+    Path(__file__)
+    .resolve()
+    .parent
+    .parent
+)
+
+DATA_PATH = (
+    BASE_DIR
+    / "data"
+    / "student_performance.csv"
+)
+
+
+@st.cache_data
+def load_data():
+    return pd.read_csv(DATA_PATH)
+
+
+df = load_data()
+
+
+# ============================================================
 # THEME
 # ============================================================
 
@@ -51,6 +91,11 @@ chart_text = theme_colors["text"]
 chart_muted = theme_colors["muted"]
 chart_border = theme_colors["border"]
 accent = theme_colors["accent"]
+
+positive_color = "#5FA879"
+negative_color = "#C86B6B"
+warning_color = "#C89C55"
+secondary_color = "#5EA8A1"
 
 
 # ============================================================
@@ -212,11 +257,13 @@ CLASSIFICATION_COMPARISON = pd.DataFrame(
             "Standard Logistic",
             "Balanced Logistic",
         ],
+
         "Accuracy": [
             77.4,
             80.9,
             72.5,
         ],
+
         "Balanced Accuracy": [
             50.0,
             64.8,
@@ -235,6 +282,403 @@ CLASSIFICATION_COMPARISON[
         "Balanced Accuracy"
     ]
 )
+
+
+# ============================================================
+# MODEL AUDIT SETUP
+# ============================================================
+
+features = [
+    "previous_exam_score",
+    "previous_gpa",
+    "attendance_percentage",
+    "assignment_completion_rate",
+    "study_hours_per_day",
+    "practice_tests_completed",
+]
+
+
+@st.cache_resource
+def get_linear_model():
+    return load_linear_model()
+
+
+@st.cache_resource
+def get_logistic_model():
+    return load_logistic_model()
+
+
+linear_model = get_linear_model()
+logistic_model = get_logistic_model()
+
+
+# ============================================================
+# FAIRNESS / SUBGROUP TEST RESULTS
+# ============================================================
+
+@st.cache_data
+def prepare_subgroup_test_results():
+
+    X = df[
+        features
+    ].copy()
+
+
+    # --------------------------------------------------------
+    # REGRESSION HELD-OUT SET
+    # --------------------------------------------------------
+
+    y_reg = df[
+        "exam_score"
+    ].copy()
+
+
+    (
+        _,
+        X_test_reg,
+        _,
+        y_test_reg,
+    ) = train_test_split(
+        X,
+        y_reg,
+        test_size=0.20,
+        random_state=42,
+    )
+
+
+    y_pred_reg = (
+        linear_model.predict(
+            X_test_reg
+        )
+    )
+
+
+    regression_results = pd.DataFrame(
+        {
+            "Actual Score":
+                y_test_reg.values,
+
+            "Predicted Score":
+                y_pred_reg,
+
+            "Residual":
+                y_test_reg.values
+                - y_pred_reg,
+
+            "Absolute Error":
+                np.abs(
+                    y_test_reg.values
+                    - y_pred_reg
+                ),
+        },
+        index=X_test_reg.index,
+    )
+
+
+    # --------------------------------------------------------
+    # CLASSIFICATION HELD-OUT SET
+    # --------------------------------------------------------
+
+    y_cls = (
+        df[
+            "pass_status"
+        ]
+        .astype(str)
+    )
+
+
+    (
+        _,
+        X_test_cls,
+        _,
+        y_test_cls,
+    ) = train_test_split(
+        X,
+        y_cls,
+        test_size=0.20,
+        random_state=42,
+        stratify=y_cls,
+    )
+
+
+    y_pred_cls = (
+        logistic_model.predict(
+            X_test_cls
+        )
+    )
+
+
+    classes = list(
+        logistic_model
+        .named_steps["model"]
+        .classes_
+    )
+
+
+    pass_index = classes.index(
+        "Pass"
+    )
+
+
+    pass_probability = (
+        logistic_model
+        .predict_proba(
+            X_test_cls
+        )[:, pass_index]
+    )
+
+
+    classification_results = pd.DataFrame(
+        {
+            "Actual Outcome":
+                y_test_cls.values,
+
+            "Predicted Outcome":
+                y_pred_cls,
+
+            "Pass Probability":
+                pass_probability,
+        },
+        index=X_test_cls.index,
+    )
+
+
+    return (
+        regression_results,
+        classification_results,
+    )
+
+
+(
+    regression_audit,
+    classification_audit,
+) = prepare_subgroup_test_results()
+
+
+# ============================================================
+# SUBGROUP METRIC CALCULATION
+# ============================================================
+
+def build_subgroup_metrics(
+    subgroup_column
+):
+
+    # --------------------------------------------------------
+    # REGRESSION
+    # --------------------------------------------------------
+
+    reg = (
+        regression_audit
+        .copy()
+    )
+
+
+    reg[
+        "Subgroup"
+    ] = (
+        df.loc[
+            reg.index,
+            subgroup_column,
+        ]
+        .astype("object")
+        .fillna("Missing / Unknown")
+        .astype(str)
+    )
+
+
+    regression_group_rows = []
+
+
+    for group_name, group_data in (
+        reg.groupby(
+            "Subgroup"
+        )
+    ):
+
+        regression_group_rows.append(
+            {
+                "Subgroup":
+                    group_name,
+
+                "Regression N":
+                    len(
+                        group_data
+                    ),
+
+                "MAE":
+                    mean_absolute_error(
+                        group_data[
+                            "Actual Score"
+                        ],
+                        group_data[
+                            "Predicted Score"
+                        ],
+                    ),
+
+                "Mean Residual":
+                    group_data[
+                        "Residual"
+                    ].mean(),
+            }
+        )
+
+
+    regression_groups = (
+        pd.DataFrame(
+            regression_group_rows
+        )
+    )
+
+
+    # --------------------------------------------------------
+    # CLASSIFICATION
+    # --------------------------------------------------------
+
+    cls = (
+        classification_audit
+        .copy()
+    )
+
+
+    cls[
+        "Subgroup"
+    ] = (
+        df.loc[
+            cls.index,
+            subgroup_column,
+        ]
+        .astype("object")
+        .fillna("Missing / Unknown")
+        .astype(str)
+    )
+
+
+    classification_group_rows = []
+
+
+    for group_name, group_data in (
+        cls.groupby(
+            "Subgroup"
+        )
+    ):
+
+        cm_group = confusion_matrix(
+            group_data[
+                "Actual Outcome"
+            ],
+            group_data[
+                "Predicted Outcome"
+            ],
+            labels=[
+                "Fail",
+                "Pass",
+            ],
+        )
+
+
+        tn, fp, fn, tp = (
+            cm_group.ravel()
+        )
+
+
+        fail_total = (
+            tn + fp
+        )
+
+        pass_total = (
+            tp + fn
+        )
+
+
+        fail_recall = (
+            tn / fail_total
+            if fail_total > 0
+            else np.nan
+        )
+
+
+        pass_recall = (
+            tp / pass_total
+            if pass_total > 0
+            else np.nan
+        )
+
+
+        if (
+            np.isnan(
+                fail_recall
+            )
+            or np.isnan(
+                pass_recall
+            )
+        ):
+
+            balanced_accuracy = (
+                np.nan
+            )
+
+        else:
+
+            balanced_accuracy = (
+                (
+                    fail_recall
+                    + pass_recall
+                )
+                / 2
+            )
+
+
+        classification_group_rows.append(
+            {
+                "Subgroup":
+                    group_name,
+
+                "Classification N":
+                    len(
+                        group_data
+                    ),
+
+                "Balanced Accuracy":
+                    balanced_accuracy
+                    * 100,
+
+                "Pass Recall":
+                    pass_recall
+                    * 100,
+
+                "Fail Recall":
+                    fail_recall
+                    * 100,
+            }
+        )
+
+
+    classification_groups = (
+        pd.DataFrame(
+            classification_group_rows
+        )
+    )
+
+
+    # --------------------------------------------------------
+    # MERGE
+    # --------------------------------------------------------
+
+    subgroup_summary = (
+        regression_groups
+        .merge(
+            classification_groups,
+            on="Subgroup",
+            how="outer",
+        )
+    )
+
+
+    return (
+        subgroup_summary,
+        reg,
+        cls,
+    )
 
 
 # ============================================================
@@ -257,6 +701,7 @@ section_title(
     "brain",
     "How the Two Models Work Together",
 )
+
 
 system_html = f"""
 <style>
@@ -389,6 +834,7 @@ st.html(
     system_html
 )
 
+
 st.info(
     "The models solve different tasks. Their metrics should therefore "
     "be interpreted separately rather than directly compared as if they "
@@ -405,10 +851,6 @@ section_title(
     "Linear Regression",
 )
 
-
-# ------------------------------------------------------------
-# KPI CARDS
-# ------------------------------------------------------------
 
 r1, r2, r3 = st.columns(3)
 
@@ -427,6 +869,7 @@ r3.metric(
     "0.444",
 )
 
+
 st.caption(
     "Score prediction · Lower MAE/RMSE is better · Higher R² is better."
 )
@@ -437,13 +880,13 @@ st.caption(
 # ============================================================
 
 reg1, reg2, reg3 = st.columns(
-    [1, 1, 1]
+    [
+        1,
+        1,
+        1,
+    ]
 )
 
-
-# ------------------------------------------------------------
-# MAE vs RMSE
-# ------------------------------------------------------------
 
 with reg1:
 
@@ -457,12 +900,14 @@ with reg1:
                 "MAE",
                 "RMSE",
             ],
+
             "Value": [
                 9.38,
                 11.76,
             ],
         }
     )
+
 
     fig_error = px.bar(
         regression_error_df,
@@ -471,42 +916,45 @@ with reg1:
         text="Value",
     )
 
+
     fig_error.update_traces(
         marker_color=accent,
         texttemplate="%{text:.2f}",
         textposition="outside",
     )
 
+
     fig_error.update_layout(
         height=315,
+
         margin=dict(
             l=15,
             r=15,
             t=10,
             b=20,
         ),
+
         xaxis_title="",
         yaxis_title="Score Points",
         showlegend=False,
     )
 
+
     style_chart(
         fig_error
     )
+
 
     st.plotly_chart(
         fig_error,
         width="stretch",
         theme=None,
         config={
-            "displayModeBar": False
+            "displayModeBar":
+                False
         },
     )
 
-
-# ------------------------------------------------------------
-# R² GAUGE
-# ------------------------------------------------------------
 
 with reg2:
 
@@ -514,17 +962,23 @@ with reg2:
         "#### Variance Explained"
     )
 
+
     fig_r2 = go.Figure(
         go.Indicator(
             mode="gauge+number",
+
             value=44.4,
+
             number={
-                "suffix": "%"
+                "suffix":
+                    "%"
             },
+
             title={
                 "text":
                     "R² = 0.444"
             },
+
             gauge={
                 "axis": {
                     "range": [
@@ -532,44 +986,52 @@ with reg2:
                         100,
                     ]
                 },
+
                 "bar": {
-                    "color": accent
+                    "color":
+                        accent
                 },
+
                 "bgcolor":
                     surface,
+
                 "bordercolor":
                     chart_border,
             },
         )
     )
 
+
     fig_r2.update_layout(
         height=315,
+
         margin=dict(
             l=25,
             r=25,
             t=35,
             b=20,
         ),
-        paper_bgcolor=chart_background,
+
+        paper_bgcolor=(
+            chart_background
+        ),
+
         font=dict(
             color=chart_text
         ),
     )
+
 
     st.plotly_chart(
         fig_r2,
         width="stretch",
         theme=None,
         config={
-            "displayModeBar": False
+            "displayModeBar":
+                False
         },
     )
 
-
-# ------------------------------------------------------------
-# EXPLAINED VS UNEXPLAINED
-# ------------------------------------------------------------
 
 with reg3:
 
@@ -577,18 +1039,21 @@ with reg3:
         "#### Explained vs Unexplained"
     )
 
+
     variance_df = pd.DataFrame(
         {
             "Component": [
                 "Explained",
                 "Unexplained",
             ],
+
             "Percentage": [
                 44.4,
                 55.6,
             ],
         }
     )
+
 
     fig_variance = px.pie(
         variance_df,
@@ -597,34 +1062,48 @@ with reg3:
         hole=0.64,
     )
 
+
     fig_variance.update_traces(
         textinfo="label+percent",
         textposition="inside",
     )
 
+
     fig_variance.update_layout(
         template=plotly_template,
+
         height=315,
+
         margin=dict(
             l=10,
             r=10,
             t=10,
             b=10,
         ),
+
         showlegend=False,
-        paper_bgcolor=chart_background,
-        plot_bgcolor=chart_background,
+
+        paper_bgcolor=(
+            chart_background
+        ),
+
+        plot_bgcolor=(
+            chart_background
+        ),
+
         font=dict(
             color=chart_text
         ),
     )
+
 
     st.plotly_chart(
         fig_variance,
         width="stretch",
         theme=None,
         config={
-            "displayModeBar": False
+            "displayModeBar":
+                False
         },
     )
 
@@ -637,6 +1116,7 @@ reg_note1, reg_note2, reg_note3 = (
     st.columns(3)
 )
 
+
 with reg_note1:
 
     icon_card(
@@ -646,6 +1126,7 @@ with reg_note1:
         "9.38 points on average.",
     )
 
+
 with reg_note2:
 
     icon_card(
@@ -653,6 +1134,7 @@ with reg_note2:
         "RMSE = 11.76",
         "Larger prediction errors receive a stronger penalty.",
     )
+
 
 with reg_note3:
 
@@ -674,25 +1156,38 @@ section_title(
 )
 
 
-# ------------------------------------------------------------
-# KPI CARDS
-# ------------------------------------------------------------
-
 classification_metric_cols = (
     st.columns(6)
 )
 
+
 classification_metric_data = [
-    ("Accuracy", "72.5%"),
-    ("Precision", "90.6%"),
-    ("Recall", "71.9%"),
-    ("F1", "80.1%"),
+    (
+        "Accuracy",
+        "72.5%",
+    ),
+    (
+        "Precision",
+        "90.6%",
+    ),
+    (
+        "Recall",
+        "71.9%",
+    ),
+    (
+        "F1",
+        "80.1%",
+    ),
     (
         "Balanced Acc.",
         "73.2%",
     ),
-    ("AUC", "0.814"),
+    (
+        "AUC",
+        "0.814",
+    ),
 ]
+
 
 for col, (
     metric_name,
@@ -716,14 +1211,13 @@ for col, (
 
 cls_left, cls_right = (
     st.columns(
-        [1.4, 1]
+        [
+            1.4,
+            1,
+        ]
     )
 )
 
-
-# ------------------------------------------------------------
-# BAR PROFILE
-# ------------------------------------------------------------
 
 with cls_left:
 
@@ -731,6 +1225,7 @@ with cls_left:
         "chart",
         "Classification Metric Profile",
     )
+
 
     classification_metric_df = (
         pd.DataFrame(
@@ -743,6 +1238,7 @@ with cls_left:
                     "Balanced Accuracy",
                     "AUC",
                 ],
+
                 "Score": [
                     72.5,
                     90.6,
@@ -755,15 +1251,15 @@ with cls_left:
         )
     )
 
-    fig_cls_metrics = (
-        px.bar(
-            classification_metric_df,
-            x="Score",
-            y="Metric",
-            orientation="h",
-            text="Score",
-        )
+
+    fig_cls_metrics = px.bar(
+        classification_metric_df,
+        x="Score",
+        y="Metric",
+        orientation="h",
+        text="Score",
     )
+
 
     fig_cls_metrics.update_traces(
         marker_color=accent,
@@ -771,14 +1267,17 @@ with cls_left:
         textposition="outside",
     )
 
+
     fig_cls_metrics.update_layout(
         height=390,
+
         margin=dict(
             l=20,
             r=65,
             t=10,
             b=20,
         ),
+
         xaxis=dict(
             title="Score (%)",
             range=[
@@ -787,27 +1286,28 @@ with cls_left:
             ],
             ticksuffix="%",
         ),
+
         yaxis_title="",
+
         showlegend=False,
     )
+
 
     style_chart(
         fig_cls_metrics
     )
+
 
     st.plotly_chart(
         fig_cls_metrics,
         width="stretch",
         theme=None,
         config={
-            "displayModeBar": False
+            "displayModeBar":
+                False
         },
     )
 
-
-# ------------------------------------------------------------
-# RADAR CHART
-# ------------------------------------------------------------
 
 with cls_right:
 
@@ -815,6 +1315,7 @@ with cls_right:
         "chart",
         "Metric Balance",
     )
+
 
     radar_labels = [
         "Accuracy",
@@ -825,6 +1326,7 @@ with cls_right:
         "AUC",
     ]
 
+
     radar_values = [
         72.5,
         90.6,
@@ -834,12 +1336,14 @@ with cls_right:
         81.4,
     ]
 
+
     radar_labels_closed = (
         radar_labels
         + [
             radar_labels[0]
         ]
     )
+
 
     radar_values_closed = (
         radar_values
@@ -848,61 +1352,85 @@ with cls_right:
         ]
     )
 
-    fig_radar = (
-        go.Figure()
-    )
+
+    fig_radar = go.Figure()
+
 
     fig_radar.add_trace(
         go.Scatterpolar(
             r=radar_values_closed,
             theta=radar_labels_closed,
             fill="toself",
+
             name=(
                 "Balanced Logistic"
             ),
+
             line=dict(
                 color=accent
             ),
         )
     )
 
+
     fig_radar.update_layout(
         template=plotly_template,
+
         height=390,
+
         margin=dict(
             l=45,
             r=45,
             t=25,
             b=25,
         ),
+
         polar=dict(
-            bgcolor=chart_background,
+            bgcolor=(
+                chart_background
+            ),
+
             radialaxis=dict(
                 visible=True,
+
                 range=[
                     0,
                     100,
                 ],
+
                 ticksuffix="%",
-                gridcolor=chart_border,
+
+                gridcolor=(
+                    chart_border
+                ),
             ),
+
             angularaxis=dict(
-                gridcolor=chart_border,
+                gridcolor=(
+                    chart_border
+                ),
             ),
         ),
+
         showlegend=False,
-        paper_bgcolor=chart_background,
+
+        paper_bgcolor=(
+            chart_background
+        ),
+
         font=dict(
             color=chart_text
         ),
     )
+
 
     st.plotly_chart(
         fig_radar,
         width="stretch",
         theme=None,
         config={
-            "displayModeBar": False
+            "displayModeBar":
+                False
         },
     )
 
@@ -917,10 +1445,6 @@ section_title(
 )
 
 
-# ------------------------------------------------------------
-# TABLE
-# ------------------------------------------------------------
-
 classification_display = (
     CLASSIFICATION_COMPARISON[
         [
@@ -932,6 +1456,7 @@ classification_display = (
     .copy()
 )
 
+
 classification_display[
     "Accuracy"
 ] = classification_display[
@@ -941,6 +1466,7 @@ classification_display[
         f"{x:.1f}%"
 )
 
+
 classification_display[
     "Balanced Accuracy"
 ] = classification_display[
@@ -949,6 +1475,7 @@ classification_display[
     lambda x:
         f"{x:.1f}%"
 )
+
 
 show_theme_table(
     classification_display
@@ -963,73 +1490,86 @@ classification_long = (
     CLASSIFICATION_COMPARISON
     .melt(
         id_vars="Model",
+
         value_vars=[
             "Accuracy",
             "Balanced Accuracy",
         ],
+
         var_name="Metric",
         value_name="Score",
     )
 )
 
-fig_compare = (
-    px.bar(
-        classification_long,
-        x="Model",
-        y="Score",
-        color="Metric",
-        barmode="group",
-        text="Score",
-    )
+
+fig_compare = px.bar(
+    classification_long,
+    x="Model",
+    y="Score",
+    color="Metric",
+    barmode="group",
+    text="Score",
 )
+
 
 fig_compare.update_traces(
     texttemplate="%{text:.1f}%",
     textposition="outside",
 )
 
+
 fig_compare.update_layout(
     height=420,
+
     margin=dict(
         l=20,
         r=20,
         t=15,
         b=20,
     ),
+
     xaxis_title="",
+
     yaxis=dict(
         title="Score (%)",
+
         range=[
             0,
             100,
         ],
+
         ticksuffix="%",
     ),
+
     legend_title="",
 )
+
 
 style_chart(
     fig_compare
 )
+
 
 st.plotly_chart(
     fig_compare,
     width="stretch",
     theme=None,
     config={
-        "displayModeBar": False
+        "displayModeBar":
+            False
     },
 )
 
 
 # ============================================================
-# ACCURACY GAP VISUAL
+# ACCURACY GAP
 # ============================================================
 
 section_title(
     "chart",
     "Why Ordinary Accuracy Can Be Misleading",
 )
+
 
 gap_df = (
     CLASSIFICATION_COMPARISON[
@@ -1041,15 +1581,15 @@ gap_df = (
     .copy()
 )
 
-fig_gap = (
-    px.bar(
-        gap_df,
-        x="Accuracy Gap",
-        y="Model",
-        orientation="h",
-        text="Accuracy Gap",
-    )
+
+fig_gap = px.bar(
+    gap_df,
+    x="Accuracy Gap",
+    y="Model",
+    orientation="h",
+    text="Accuracy Gap",
 )
+
 
 fig_gap.update_traces(
     marker_color=accent,
@@ -1057,40 +1597,50 @@ fig_gap.update_traces(
     textposition="outside",
 )
 
+
 fig_gap.add_vline(
     x=0,
     line_dash="dash",
     line_color=chart_muted,
 )
 
+
 fig_gap.update_layout(
     height=290,
+
     margin=dict(
         l=20,
         r=80,
         t=10,
         b=20,
     ),
+
     xaxis_title=(
         "Accuracy − Balanced Accuracy "
         "(percentage points)"
     ),
+
     yaxis_title="",
+
     showlegend=False,
 )
+
 
 style_chart(
     fig_gap
 )
+
 
 st.plotly_chart(
     fig_gap,
     width="stretch",
     theme=None,
     config={
-        "displayModeBar": False
+        "displayModeBar":
+            False
     },
 )
+
 
 st.caption(
     "A large positive gap suggests that ordinary accuracy may be "
@@ -1108,6 +1658,7 @@ section_title(
     "Balanced Accuracy Ranking",
 )
 
+
 balanced_ranking_df = (
     CLASSIFICATION_COMPARISON[
         [
@@ -1121,15 +1672,15 @@ balanced_ranking_df = (
     )
 )
 
-fig_rank = (
-    px.bar(
-        balanced_ranking_df,
-        x="Balanced Accuracy",
-        y="Model",
-        orientation="h",
-        text="Balanced Accuracy",
-    )
+
+fig_rank = px.bar(
+    balanced_ranking_df,
+    x="Balanced Accuracy",
+    y="Model",
+    orientation="h",
+    text="Balanced Accuracy",
 )
+
 
 fig_rank.update_traces(
     marker_color=accent,
@@ -1137,44 +1688,54 @@ fig_rank.update_traces(
     textposition="outside",
 )
 
+
 fig_rank.update_layout(
     height=300,
+
     margin=dict(
         l=20,
         r=70,
         t=10,
         b=20,
     ),
+
     xaxis=dict(
         title=(
             "Balanced Accuracy (%)"
         ),
+
         range=[
             0,
             100,
         ],
+
         ticksuffix="%",
     ),
+
     yaxis_title="",
+
     showlegend=False,
 )
+
 
 style_chart(
     fig_rank
 )
+
 
 st.plotly_chart(
     fig_rank,
     width="stretch",
     theme=None,
     config={
-        "displayModeBar": False
+        "displayModeBar":
+            False
     },
 )
 
 
 # ============================================================
-# CLASSIFIER DECISION CARDS
+# CLASSIFIER DECISION
 # ============================================================
 
 section_title(
@@ -1182,9 +1743,11 @@ section_title(
     "Classification Model Selection",
 )
 
+
 sel1, sel2, sel3 = (
     st.columns(3)
 )
+
 
 with sel1:
 
@@ -1246,9 +1809,11 @@ section_title(
     "Final Prediction System",
 )
 
+
 final1, final2 = (
     st.columns(2)
 )
+
 
 with final1:
 
@@ -1287,7 +1852,7 @@ with final2:
 
 
 # ============================================================
-# FINAL MODEL SUMMARY TABLE
+# FINAL MODEL SUMMARY
 # ============================================================
 
 section_title(
@@ -1295,42 +1860,50 @@ section_title(
     "Final Model Summary",
 )
 
+
 summary_df = pd.DataFrame(
     {
         "Model": [
             "Linear Regression",
             "Balanced Logistic Regression",
         ],
+
         "Task": [
             "Regression",
             "Classification",
         ],
+
         "Target": [
             "Exam Score",
             "Pass / Fail",
         ],
+
         "Output": [
             "Numerical score",
             "Class + probability",
         ],
+
         "Key Performance": [
             (
                 "MAE 9.38 | "
                 "RMSE 11.76 | "
                 "R² 0.444"
             ),
+
             (
                 "Balanced Accuracy 73.2% | "
                 "F1 80.1% | "
                 "AUC 0.814"
             ),
         ],
+
         "Final Use": [
             "Selected",
             "Selected",
         ],
     }
 )
+
 
 show_theme_table(
     summary_df
@@ -1346,9 +1919,11 @@ section_title(
     "Why These Two Models?",
 )
 
+
 reason1, reason2, reason3 = (
     st.columns(3)
 )
+
 
 with reason1:
 
@@ -1381,7 +1956,849 @@ with reason3:
 
 
 # ============================================================
-# RESPONSIBLE INTERPRETATION
+# FAIRNESS & SUBGROUP ANALYSIS
+# ============================================================
+
+section_title(
+    "scale",
+    "Fairness & Subgroup Analysis",
+)
+
+
+st.caption(
+    "Audit model performance across student groups. "
+    "These subgroup variables are used only for evaluation — "
+    "they are not inputs to either prediction model."
+)
+
+
+# ------------------------------------------------------------
+# AVAILABLE GROUPS
+# ------------------------------------------------------------
+
+subgroup_options = {
+    "Gender":
+        "gender",
+
+    "Education Level":
+        "education_level",
+
+    "School Type":
+        "school_type",
+
+    "Family Income":
+        "family_income",
+
+    "Urban / Rural":
+        "urban_rural",
+}
+
+
+available_subgroups = {
+    label: column
+    for label, column
+    in subgroup_options.items()
+    if column in df.columns
+}
+
+
+selected_subgroup_label = (
+    st.selectbox(
+        "Compare performance by",
+        list(
+            available_subgroups.keys()
+        ),
+        index=0,
+    )
+)
+
+
+selected_subgroup_column = (
+    available_subgroups[
+        selected_subgroup_label
+    ]
+)
+
+
+(
+    subgroup_summary,
+    regression_subgroup_rows,
+    classification_subgroup_rows,
+) = build_subgroup_metrics(
+    selected_subgroup_column
+)
+
+
+# ============================================================
+# AUDIT SUMMARY VALUES
+# ============================================================
+
+valid_ba = (
+    subgroup_summary[
+        "Balanced Accuracy"
+    ]
+    .dropna()
+)
+
+
+valid_mae = (
+    subgroup_summary[
+        "MAE"
+    ]
+    .dropna()
+)
+
+
+number_groups = (
+    subgroup_summary[
+        "Subgroup"
+    ]
+    .nunique()
+)
+
+
+largest_group = int(
+    subgroup_summary[
+        "Classification N"
+    ]
+    .fillna(0)
+    .max()
+)
+
+
+ba_gap = (
+    valid_ba.max()
+    - valid_ba.min()
+    if len(
+        valid_ba
+    ) > 1
+    else 0
+)
+
+
+mae_gap = (
+    valid_mae.max()
+    - valid_mae.min()
+    if len(
+        valid_mae
+    ) > 1
+    else 0
+)
+
+
+audit1, audit2, audit3, audit4 = (
+    st.columns(4)
+)
+
+
+audit1.metric(
+    "Groups",
+    number_groups,
+)
+
+
+audit2.metric(
+    "Largest Test Group",
+    f"{largest_group:,}",
+)
+
+
+audit3.metric(
+    "Balanced Acc. Gap",
+    f"{ba_gap:.1f} pts",
+)
+
+
+audit4.metric(
+    "MAE Gap",
+    f"{mae_gap:.2f}",
+)
+
+
+# ============================================================
+# FIRST ROW OF AUDIT VISUALS
+# ============================================================
+
+audit_left, audit_right = (
+    st.columns(2)
+)
+
+
+# ------------------------------------------------------------
+# GROUP SIZE
+# ------------------------------------------------------------
+
+with audit_left:
+
+    section_title(
+        "database",
+        "Test-Set Group Size",
+    )
+
+
+    size_df = (
+        subgroup_summary[
+            [
+                "Subgroup",
+                "Classification N",
+            ]
+        ]
+        .sort_values(
+            "Classification N",
+            ascending=True,
+        )
+    )
+
+
+    fig_size = px.bar(
+        size_df,
+        x="Classification N",
+        y="Subgroup",
+        orientation="h",
+        text="Classification N",
+    )
+
+
+    fig_size.update_traces(
+        marker_color=accent,
+        textposition="outside",
+        texttemplate="%{text:,}",
+    )
+
+
+    fig_size.update_layout(
+        height=340,
+
+        margin=dict(
+            l=20,
+            r=65,
+            t=10,
+            b=20,
+        ),
+
+        xaxis_title=(
+            "Held-Out Test Students"
+        ),
+
+        yaxis_title="",
+
+        showlegend=False,
+    )
+
+
+    style_chart(
+        fig_size
+    )
+
+
+    st.plotly_chart(
+        fig_size,
+        width="stretch",
+        theme=None,
+        config={
+            "displayModeBar":
+                False
+        },
+    )
+
+
+# ------------------------------------------------------------
+# REGRESSION MAE
+# ------------------------------------------------------------
+
+with audit_right:
+
+    section_title(
+        "trending",
+        "Regression Error by Group",
+    )
+
+
+    mae_df = (
+        subgroup_summary[
+            [
+                "Subgroup",
+                "MAE",
+            ]
+        ]
+        .dropna()
+        .sort_values(
+            "MAE",
+            ascending=True,
+        )
+    )
+
+
+    fig_group_mae = px.bar(
+        mae_df,
+        x="MAE",
+        y="Subgroup",
+        orientation="h",
+        text="MAE",
+    )
+
+
+    fig_group_mae.update_traces(
+        marker_color=negative_color,
+
+        texttemplate=(
+            "%{text:.2f}"
+        ),
+
+        textposition="outside",
+    )
+
+
+    fig_group_mae.update_layout(
+        height=340,
+
+        margin=dict(
+            l=20,
+            r=65,
+            t=10,
+            b=20,
+        ),
+
+        xaxis_title=(
+            "Mean Absolute Error"
+        ),
+
+        yaxis_title="",
+
+        showlegend=False,
+    )
+
+
+    style_chart(
+        fig_group_mae
+    )
+
+
+    st.plotly_chart(
+        fig_group_mae,
+        width="stretch",
+        theme=None,
+        config={
+            "displayModeBar":
+                False
+        },
+    )
+
+
+# ============================================================
+# SECOND ROW
+# ============================================================
+
+audit_cls_left, audit_cls_right = (
+    st.columns(2)
+)
+
+
+# ------------------------------------------------------------
+# BALANCED ACCURACY
+# ------------------------------------------------------------
+
+with audit_cls_left:
+
+    section_title(
+        "target",
+        "Balanced Accuracy by Group",
+    )
+
+
+    ba_df = (
+        subgroup_summary[
+            [
+                "Subgroup",
+                "Balanced Accuracy",
+            ]
+        ]
+        .dropna()
+        .sort_values(
+            "Balanced Accuracy",
+            ascending=True,
+        )
+    )
+
+
+    fig_group_ba = px.bar(
+        ba_df,
+        x="Balanced Accuracy",
+        y="Subgroup",
+        orientation="h",
+        text="Balanced Accuracy",
+    )
+
+
+    fig_group_ba.update_traces(
+        marker_color=positive_color,
+
+        texttemplate=(
+            "%{text:.1f}%"
+        ),
+
+        textposition="outside",
+    )
+
+
+    fig_group_ba.update_layout(
+        height=350,
+
+        margin=dict(
+            l=20,
+            r=70,
+            t=10,
+            b=20,
+        ),
+
+        xaxis=dict(
+            title=(
+                "Balanced Accuracy (%)"
+            ),
+
+            range=[
+                0,
+                100,
+            ],
+
+            ticksuffix="%",
+        ),
+
+        yaxis_title="",
+
+        showlegend=False,
+    )
+
+
+    style_chart(
+        fig_group_ba
+    )
+
+
+    st.plotly_chart(
+        fig_group_ba,
+        width="stretch",
+        theme=None,
+        config={
+            "displayModeBar":
+                False
+        },
+    )
+
+
+# ------------------------------------------------------------
+# PASS VS FAIL RECALL
+# ------------------------------------------------------------
+
+with audit_cls_right:
+
+    section_title(
+        "chart",
+        "Pass vs. Fail Recall",
+    )
+
+
+    recall_df = (
+        subgroup_summary[
+            [
+                "Subgroup",
+                "Pass Recall",
+                "Fail Recall",
+            ]
+        ]
+        .dropna()
+    )
+
+
+    fig_recall = go.Figure()
+
+
+    fig_recall.add_trace(
+        go.Bar(
+            x=recall_df[
+                "Subgroup"
+            ],
+
+            y=recall_df[
+                "Pass Recall"
+            ],
+
+            name="Pass Recall",
+
+            marker_color=(
+                positive_color
+            ),
+
+            text=recall_df[
+                "Pass Recall"
+            ],
+
+            texttemplate=(
+                "%{text:.1f}%"
+            ),
+
+            textposition=(
+                "outside"
+            ),
+        )
+    )
+
+
+    fig_recall.add_trace(
+        go.Bar(
+            x=recall_df[
+                "Subgroup"
+            ],
+
+            y=recall_df[
+                "Fail Recall"
+            ],
+
+            name="Fail Recall",
+
+            marker_color=(
+                negative_color
+            ),
+
+            text=recall_df[
+                "Fail Recall"
+            ],
+
+            texttemplate=(
+                "%{text:.1f}%"
+            ),
+
+            textposition=(
+                "outside"
+            ),
+        )
+    )
+
+
+    fig_recall.update_layout(
+        barmode="group",
+
+        height=350,
+
+        margin=dict(
+            l=20,
+            r=20,
+            t=10,
+            b=45,
+        ),
+
+        xaxis_title="",
+
+        yaxis=dict(
+            title="Recall (%)",
+
+            range=[
+                0,
+                100,
+            ],
+
+            ticksuffix="%",
+        ),
+
+        legend=dict(
+            title="",
+            orientation="h",
+            y=1.08,
+            x=1,
+            xanchor="right",
+        ),
+    )
+
+
+    style_chart(
+        fig_recall
+    )
+
+
+    st.plotly_chart(
+        fig_recall,
+        width="stretch",
+        theme=None,
+        config={
+            "displayModeBar":
+                False
+        },
+    )
+
+
+# ============================================================
+# ERROR DISTRIBUTION
+# ============================================================
+
+section_title(
+    "chart",
+    "Prediction Error Distribution",
+)
+
+
+fig_error_distribution = px.box(
+    regression_subgroup_rows,
+    x="Subgroup",
+    y="Absolute Error",
+    points=False,
+)
+
+
+fig_error_distribution.update_traces(
+    line_color=accent,
+    marker_color=accent,
+)
+
+
+fig_error_distribution.update_layout(
+    height=380,
+
+    margin=dict(
+        l=20,
+        r=20,
+        t=10,
+        b=45,
+    ),
+
+    xaxis_title="",
+
+    yaxis_title=(
+        "Absolute Prediction Error"
+    ),
+
+    showlegend=False,
+)
+
+
+style_chart(
+    fig_error_distribution
+)
+
+
+st.plotly_chart(
+    fig_error_distribution,
+    width="stretch",
+    theme=None,
+    config={
+        "displayModeBar":
+            False
+    },
+)
+
+
+st.caption(
+    "The box plots show the distribution of absolute regression error "
+    "within each subgroup, not just the average error."
+)
+
+
+# ============================================================
+# FAIRNESS MAP
+# ============================================================
+
+section_title(
+    "sparkles",
+    "Subgroup Performance Map",
+)
+
+
+fairness_map_df = (
+    subgroup_summary[
+        [
+            "Subgroup",
+            "MAE",
+            "Balanced Accuracy",
+            "Classification N",
+        ]
+    ]
+    .dropna()
+)
+
+
+fig_fairness_map = px.scatter(
+    fairness_map_df,
+
+    x="MAE",
+
+    y="Balanced Accuracy",
+
+    size="Classification N",
+
+    text="Subgroup",
+
+    hover_name="Subgroup",
+
+    size_max=48,
+)
+
+
+fig_fairness_map.update_traces(
+    marker=dict(
+        color=accent,
+        opacity=0.78,
+
+        line=dict(
+            color=chart_border,
+            width=1,
+        ),
+    ),
+
+    textposition="top center",
+)
+
+
+fig_fairness_map.update_layout(
+    height=430,
+
+    margin=dict(
+        l=25,
+        r=25,
+        t=10,
+        b=25,
+    ),
+
+    xaxis_title=(
+        "Regression MAE → lower is better"
+    ),
+
+    yaxis=dict(
+        title=(
+            "Balanced Accuracy (%) → higher is better"
+        ),
+
+        range=[
+            0,
+            100,
+        ],
+
+        ticksuffix="%",
+    ),
+
+    showlegend=False,
+)
+
+
+style_chart(
+    fig_fairness_map
+)
+
+
+st.plotly_chart(
+    fig_fairness_map,
+    width="stretch",
+    theme=None,
+    config={
+        "displayModeBar":
+            False
+    },
+)
+
+
+st.caption(
+    "Bubble size represents subgroup test-set size. "
+    "The most favorable area is toward the upper-left: "
+    "lower regression error and higher classification Balanced Accuracy."
+)
+
+
+# ============================================================
+# SUBGROUP SUMMARY TABLE
+# ============================================================
+
+section_title(
+    "database",
+    "Subgroup Audit Summary",
+)
+
+
+audit_display = (
+    subgroup_summary[
+        [
+            "Subgroup",
+            "Regression N",
+            "MAE",
+            "Balanced Accuracy",
+            "Pass Recall",
+            "Fail Recall",
+        ]
+    ]
+    .copy()
+)
+
+
+audit_display[
+    "Regression N"
+] = (
+    audit_display[
+        "Regression N"
+    ]
+    .map(
+        lambda value:
+            f"{int(value):,}"
+        if pd.notna(
+            value
+        )
+        else "—"
+    )
+)
+
+
+audit_display[
+    "MAE"
+] = (
+    audit_display[
+        "MAE"
+    ]
+    .map(
+        lambda value:
+            f"{value:.2f}"
+        if pd.notna(
+            value
+        )
+        else "—"
+    )
+)
+
+
+for metric in [
+    "Balanced Accuracy",
+    "Pass Recall",
+    "Fail Recall",
+]:
+
+    audit_display[
+        metric
+    ] = (
+        audit_display[
+            metric
+        ]
+        .map(
+            lambda value:
+                f"{value:.1f}%"
+            if pd.notna(
+                value
+            )
+            else "—"
+        )
+    )
+
+
+show_theme_table(
+    audit_display
+)
+
+
+st.info(
+    "This section is a model audit, not a causal or discrimination claim. "
+    "Gender, education level, school type, family income, and urban/rural "
+    "status are not part of the six prediction inputs. Differences across "
+    "groups can also reflect subgroup size, data composition, or other "
+    "variables not represented in the model."
+)
+
+
+# ============================================================
+# MODEL LIMITATIONS
 # ============================================================
 
 section_title(
@@ -1389,9 +2806,11 @@ section_title(
     "Model Limitations",
 )
 
+
 lim1, lim2, lim3 = (
     st.columns(3)
 )
+
 
 with lim1:
 
@@ -1432,10 +2851,12 @@ section_title(
     "Model Comparison Takeaway",
 )
 
+
 st.success(
     "The final system uses Linear Regression for exam-score estimation "
     "and Balanced Logistic Regression for Pass / Fail classification. "
-    "The two models complement each other rather than compete."
+    "The subgroup audit adds another layer of evaluation by checking "
+    "whether held-out performance changes across different student groups."
 )
 
 

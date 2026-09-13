@@ -1,11 +1,11 @@
 # ============================================================
 # PREDICT PERFORMANCE PAGE
-# Visual-first compact version
-# Final polished version
+# Compact card-based interactive version
 # ============================================================
 
 import random
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -25,6 +25,11 @@ from components.icons import (
 )
 
 from core.prediction import predict_student_performance
+
+from core.model_loader import (
+    load_linear_model,
+    load_logistic_model,
+)
 
 
 # ============================================================
@@ -54,6 +59,45 @@ muted = theme["muted"]
 border = theme["border"]
 accent = theme["accent"]
 
+positive_color = "#5FA879"
+negative_color = "#C86B6B"
+
+
+# ============================================================
+# CONSTANTS
+# ============================================================
+
+MODEL_MAE = 9.38
+CLASSIFICATION_BALANCED_ACCURACY = 73.2
+CLASSIFICATION_AUC = 0.814
+
+FEATURES = [
+    "previous_exam_score",
+    "previous_gpa",
+    "attendance_percentage",
+    "assignment_completion_rate",
+    "study_hours_per_day",
+    "practice_tests_completed",
+]
+
+FEATURE_LABELS = {
+    "previous_exam_score": "Previous Exam",
+    "previous_gpa": "Previous GPA",
+    "attendance_percentage": "Attendance",
+    "assignment_completion_rate": "Assignments",
+    "study_hours_per_day": "Study Hours",
+    "practice_tests_completed": "Practice Tests",
+}
+
+DEFAULT_VALUES = {
+    "previous_exam_score": 70.0,
+    "previous_gpa": 3.0,
+    "attendance_percentage": 85.0,
+    "assignment_completion_rate": 75.0,
+    "study_hours_per_day": 3.0,
+    "practice_tests_completed": 6,
+}
+
 
 # ============================================================
 # PAGE CSS
@@ -64,22 +108,63 @@ st.markdown(
     <style>
 
     .block-container {{
-        padding-top: 1.65rem;
+        padding-top: 1.55rem;
         padding-bottom: 2rem;
     }}
 
+    /* --------------------------------------------------------
+       COMPACT INPUT CARDS
+    -------------------------------------------------------- */
+
+    div[data-testid="stVerticalBlockBorderWrapper"] {{
+        background: {surface};
+        border-color: {border} !important;
+        border-radius: 14px;
+    }}
+
+    div[data-testid="stVerticalBlockBorderWrapper"] > div {{
+        padding-top: 0.15rem;
+    }}
+
     div[data-testid="stNumberInput"] {{
-        margin-bottom: -0.30rem;
+        margin-top: -0.10rem;
+        margin-bottom: -0.15rem;
     }}
 
     div[data-testid="stNumberInput"] label {{
-        margin-bottom: 0.05rem;
-        font-size: 0.86rem;
+        display: none;
     }}
 
-    div[data-testid="stButton"] {{
-        margin-top: 0;
+    div[data-testid="stNumberInput"] input {{
+        font-weight: 650;
+        font-size: 1rem;
     }}
+
+    .input-category {{
+        color: {accent};
+        font-size: 0.66rem;
+        font-weight: 750;
+        letter-spacing: 0.06rem;
+        text-transform: uppercase;
+        margin-bottom: 2px;
+    }}
+
+    .input-card-title {{
+        color: {text_color};
+        font-size: 0.93rem;
+        font-weight: 650;
+        margin-bottom: 2px;
+    }}
+
+    .input-card-range {{
+        color: {muted};
+        font-size: 0.70rem;
+        margin-bottom: 6px;
+    }}
+
+    /* --------------------------------------------------------
+       RESULT CARDS
+    -------------------------------------------------------- */
 
     .prediction-hero {{
         background: {surface};
@@ -109,105 +194,16 @@ st.markdown(
     }}
 
     .result-pass {{
-        color: #5FA879 !important;
+        color: {positive_color} !important;
     }}
 
     .result-fail {{
-        color: #C86B6B !important;
+        color: {negative_color} !important;
     }}
 
-    .visual-note {{
-        color: {muted};
-        font-size: 0.80rem;
-        line-height: 1.45;
-    }}
-
-    .threshold-card {{
-        background: {surface};
-        border: 1px solid {border};
-        border-radius: 12px;
-        padding: 14px 17px;
-    }}
-
-    .threshold-label {{
-        color: {muted};
-        font-size: 0.76rem;
-    }}
-
-    .threshold-value {{
-        color: {text_color};
-        font-size: 1.05rem;
-        font-weight: 650;
-        margin-top: 4px;
-    }}
-
-    .threshold-note {{
-        color: {muted};
-        font-size: 0.80rem;
-        margin-top: 6px;
-        line-height: 1.45;
-    }}
-
-    .interpretation-box {{
-        background: {surface};
-        border: 1px solid {border};
-        border-radius: 12px;
-        padding: 15px 18px;
-    }}
-
-    .interpretation-title {{
-        color: {text_color};
-        font-size: 0.95rem;
-        font-weight: 650;
-        margin-bottom: 6px;
-    }}
-
-    .interpretation-text {{
-        color: {muted};
-        font-size: 0.84rem;
-        line-height: 1.5;
-    }}
-
-    .scenario-card {{
-        background: {surface};
-        border: 1px solid {border};
-        border-radius: 12px;
-        padding: 13px 16px;
-        min-height: 103px;
-    }}
-
-    .scenario-label {{
-        color: {muted};
-        font-size: 0.76rem;
-        margin-bottom: 5px;
-    }}
-
-    .scenario-value {{
-        color: {text_color};
-        font-size: 1.35rem;
-        font-weight: 700;
-    }}
-
-    .scenario-note {{
-        color: {muted};
-        font-size: 0.78rem;
-        margin-top: 5px;
-    }}
-
-    .positive-change {{
-        color: #5FA879;
-        font-weight: 650;
-    }}
-
-    .negative-change {{
-        color: #C86B6B;
-        font-weight: 650;
-    }}
-
-    .neutral-change {{
-        color: {muted};
-        font-weight: 650;
-    }}
+    /* --------------------------------------------------------
+       SUMMARY TABLE
+    -------------------------------------------------------- */
 
     .compact-model-table {{
         width: 100%;
@@ -238,10 +234,49 @@ st.markdown(
         border-bottom: none;
     }}
 
-    .scroll-anchor {{
-        width: 1px;
-        height: 1px;
-        visibility: hidden;
+    /* --------------------------------------------------------
+       SCENARIO
+    -------------------------------------------------------- */
+
+    .scenario-card {{
+        background: {surface};
+        border: 1px solid {border};
+        border-radius: 12px;
+        padding: 13px 16px;
+        min-height: 103px;
+    }}
+
+    .scenario-label {{
+        color: {muted};
+        font-size: 0.76rem;
+        margin-bottom: 5px;
+    }}
+
+    .scenario-value {{
+        color: {text_color};
+        font-size: 1.35rem;
+        font-weight: 700;
+    }}
+
+    .scenario-note {{
+        color: {muted};
+        font-size: 0.78rem;
+        margin-top: 5px;
+    }}
+
+    .positive-change {{
+        color: {positive_color};
+        font-weight: 650;
+    }}
+
+    .negative-change {{
+        color: {negative_color};
+        font-weight: 650;
+    }}
+
+    .neutral-change {{
+        color: {muted};
+        font-weight: 650;
     }}
 
     .no-change-box {{
@@ -250,19 +285,14 @@ st.markdown(
         border-radius: 12px;
         padding: 14px 16px;
         margin-top: 12px;
-    }}
-
-    .no-change-title {{
-        color: {text_color};
-        font-size: 0.92rem;
-        font-weight: 650;
-        margin-bottom: 5px;
-    }}
-
-    .no-change-text {{
         color: {muted};
         font-size: 0.82rem;
-        line-height: 1.45;
+    }}
+
+    .scroll-anchor {{
+        width: 1px;
+        height: 1px;
+        visibility: hidden;
     }}
 
     </style>
@@ -272,27 +302,8 @@ st.markdown(
 
 
 # ============================================================
-# CONSTANTS
+# SESSION STATE
 # ============================================================
-
-MODEL_MAE = 9.38
-CLASSIFICATION_BALANCED_ACCURACY = 73.2
-CLASSIFICATION_AUC = 0.814
-
-
-# ============================================================
-# DEFAULT INPUTS
-# ============================================================
-
-DEFAULT_VALUES = {
-    "previous_exam_score": 70.0,
-    "previous_gpa": 3.0,
-    "attendance_percentage": 85.0,
-    "assignment_completion_rate": 75.0,
-    "study_hours_per_day": 3.0,
-    "practice_tests_completed": 6,
-}
-
 
 for key, value in DEFAULT_VALUES.items():
 
@@ -300,88 +311,67 @@ for key, value in DEFAULT_VALUES.items():
         st.session_state[key] = value
 
 
-if "prediction_result" not in st.session_state:
-    st.session_state.prediction_result = None
+for key in [
+    "prediction_result",
+    "prediction_inputs",
+    "scenario_result",
+    "scroll_target",
+]:
 
-if "prediction_inputs" not in st.session_state:
-    st.session_state.prediction_inputs = None
-
-if "scenario_result" not in st.session_state:
-    st.session_state.scenario_result = None
-
-if "scroll_target" not in st.session_state:
-    st.session_state.scroll_target = None
+    if key not in st.session_state:
+        st.session_state[key] = None
 
 
 # ============================================================
-# SCROLL HELPER
+# MODELS FOR PREDICTION EXPLANATION
 # ============================================================
 
-def scroll_to_anchor(anchor_id):
+@st.cache_resource
+def get_explanation_models():
 
-    scroll_html = f"""
-    <!DOCTYPE html>
-
-    <html>
-
-    <body style="margin:0;padding:0;background:transparent;">
-
-    <script>
-
-    (function() {{
-
-        function performScroll() {{
-
-            try {{
-
-                const doc = window.parent.document;
-
-                const target =
-                    doc.getElementById("{anchor_id}");
-
-                if (target) {{
-
-                    target.scrollIntoView({{
-                        behavior: "smooth",
-                        block: "start"
-                    }});
-
-                }}
-
-            }} catch (error) {{
-
-                console.log(
-                    "Automatic result scrolling unavailable."
-                );
-
-            }}
-
-        }}
-
-        setTimeout(
-            performScroll,
-            120
-        );
-
-    }})();
-
-    </script>
-
-    </body>
-
-    </html>
-    """
-
-    st.iframe(
-        scroll_html,
-        height=1,
-        width="stretch",
-        tab_index=-1,
+    return (
+        load_linear_model(),
+        load_logistic_model(),
     )
 
 
+linear_model, logistic_model = (
+    get_explanation_models()
+)
+
+
 # ============================================================
-# RESET RESULTS
+# CHART STYLE
+# ============================================================
+
+def style_chart(fig):
+
+    fig.update_layout(
+        template=plotly_template,
+        paper_bgcolor=background,
+        plot_bgcolor=background,
+        font=dict(
+            color=text_color
+        ),
+    )
+
+    fig.update_xaxes(
+        color=text_color,
+        gridcolor=border,
+        zerolinecolor=border,
+    )
+
+    fig.update_yaxes(
+        color=text_color,
+        gridcolor=border,
+        zerolinecolor=border,
+    )
+
+    return fig
+
+
+# ============================================================
+# CLEAR RESULTS
 # ============================================================
 
 def clear_results():
@@ -461,33 +451,77 @@ def reset_inputs():
 
 
 # ============================================================
-# CHART STYLE
+# AUTO SCROLL
 # ============================================================
 
-def style_chart(fig):
+def scroll_to_anchor(
+    anchor_id
+):
 
-    fig.update_layout(
-        template=plotly_template,
-        paper_bgcolor=background,
-        plot_bgcolor=background,
-        font=dict(
-            color=text_color
-        ),
+    scroll_html = f"""
+    <html>
+
+    <body
+        style="
+            margin:0;
+            padding:0;
+            background:transparent;
+        "
+    >
+
+    <script>
+
+    (function() {{
+
+        function performScroll() {{
+
+            try {{
+
+                const doc =
+                    window.parent.document;
+
+                const target =
+                    doc.getElementById(
+                        "{anchor_id}"
+                    );
+
+                if (target) {{
+
+                    target.scrollIntoView({{
+                        behavior: "smooth",
+                        block: "start"
+                    }});
+
+                }}
+
+            }}
+
+            catch (error) {{
+
+            }}
+
+        }}
+
+        setTimeout(
+            performScroll,
+            120
+        );
+
+    }})();
+
+    </script>
+
+    </body>
+
+    </html>
+    """
+
+    st.iframe(
+        scroll_html,
+        height=1,
+        width="stretch",
+        tab_index=-1,
     )
-
-    fig.update_xaxes(
-        color=text_color,
-        gridcolor=border,
-        zerolinecolor=border,
-    )
-
-    fig.update_yaxes(
-        color=text_color,
-        gridcolor=border,
-        zerolinecolor=border,
-    )
-
-    return fig
 
 
 # ============================================================
@@ -501,23 +535,224 @@ def format_change(
 
     if value > 0:
 
-        css_class = "positive-change"
-        sign = "+"
+        return (
+            "positive-change",
+            f"+{value:.1f}{suffix}",
+        )
 
-    elif value < 0:
+    if value < 0:
 
-        css_class = "negative-change"
-        sign = ""
+        return (
+            "negative-change",
+            f"{value:.1f}{suffix}",
+        )
+
+    return (
+        "neutral-change",
+        f"{value:.1f}{suffix}",
+    )
+
+
+# ============================================================
+# MODEL CONTRIBUTIONS
+# ============================================================
+
+def model_contributions(
+    pipeline,
+    input_data,
+    logistic=False,
+):
+
+    input_df = pd.DataFrame(
+        [input_data],
+        columns=FEATURES,
+    )
+
+    transformed = (
+        pipeline[:-1]
+        .transform(
+            input_df
+        )
+    )
+
+    if hasattr(
+        transformed,
+        "toarray",
+    ):
+
+        transformed = (
+            transformed.toarray()
+        )
+
+    transformed = np.asarray(
+        transformed
+    )
+
+    coefficients = np.asarray(
+        pipeline
+        .named_steps["model"]
+        .coef_
+    )
+
+
+    # --------------------------------------------------------
+    # LOGISTIC
+    # --------------------------------------------------------
+
+    if logistic:
+
+        classes = list(
+            pipeline
+            .named_steps["model"]
+            .classes_
+        )
+
+        coefficients = (
+            coefficients[0]
+        )
+
+        # sklearn binary logistic coefficients point
+        # toward classes_[1].
+        # Positive values should always mean "toward Pass".
+
+        if classes[1] != "Pass":
+
+            coefficients = (
+                -coefficients
+            )
+
+
+    # --------------------------------------------------------
+    # LINEAR
+    # --------------------------------------------------------
 
     else:
 
-        css_class = "neutral-change"
-        sign = ""
+        if coefficients.ndim > 1:
 
-    return (
-        css_class,
-        f"{sign}{value:.1f}{suffix}",
+            coefficients = (
+                coefficients[0]
+            )
+
+
+    contributions = (
+        transformed[0]
+        * coefficients
     )
+
+
+    contribution_df = pd.DataFrame(
+        {
+            "Feature": [
+                FEATURE_LABELS[
+                    feature
+                ]
+                for feature in FEATURES
+            ],
+
+            "Contribution":
+                contributions,
+        }
+    )
+
+    return contribution_df
+
+
+# ============================================================
+# INPUT CARD
+# ============================================================
+
+def input_card(
+    category,
+    title,
+    range_text,
+    key,
+    min_value,
+    max_value,
+    step,
+    display_format=None,
+):
+
+    with st.container(
+        border=True
+    ):
+
+        st.html(
+            f"""
+            <div class="input-category">
+                {category}
+            </div>
+
+            <div class="input-card-title">
+                {title}
+            </div>
+
+            <div class="input-card-range">
+                {range_text}
+            </div>
+            """
+        )
+
+        kwargs = {
+            "label":
+                title,
+
+            "min_value":
+                min_value,
+
+            "max_value":
+                max_value,
+
+            "step":
+                step,
+
+            "key":
+                key,
+
+            "label_visibility":
+                "collapsed",
+        }
+
+        if display_format is not None:
+
+            kwargs["format"] = (
+                display_format
+            )
+
+
+        value = st.number_input(
+            **kwargs
+        )
+
+
+        normalized = (
+            (
+                float(value)
+                - float(min_value)
+            )
+            /
+            (
+                float(max_value)
+                - float(min_value)
+            )
+        )
+
+
+        normalized = max(
+            0.0,
+            min(
+                1.0,
+                normalized,
+            ),
+        )
+
+
+        st.progress(
+            normalized
+        )
+
+
+        return value
 
 
 # ============================================================
@@ -527,7 +762,7 @@ def format_change(
 page_title(
     "sparkles",
     "Student Performance Predictor",
-    "Enter six student academic variables to estimate exam score, "
+    "Enter six academic variables to estimate exam score, "
     "Pass / Fail status, and pass probability.",
 )
 
@@ -580,23 +815,25 @@ with qa3:
 
 
 # ============================================================
-# TOP INTERACTION AREA
+# TOP INPUT DASHBOARD
 # ============================================================
 
-left_panel, right_panel = st.columns(
-    [
-        1.55,
-        1,
-    ],
-    gap="large",
+input_panel, profile_panel = (
+    st.columns(
+        [
+            2,
+            0.95,
+        ],
+        gap="large",
+    )
 )
 
 
 # ============================================================
-# INPUTS
+# INPUT CARDS
 # ============================================================
 
-with left_panel:
+with input_panel:
 
     section_title(
         "filter",
@@ -604,64 +841,193 @@ with left_panel:
     )
 
 
-    input1, input2 = st.columns(2)
+    # --------------------------------------------------------
+    # FIRST ROW
+    # --------------------------------------------------------
+
+    card1, card2, card3 = (
+        st.columns(3)
+    )
 
 
-    with input1:
+    with card1:
 
-        previous_exam_score = st.number_input(
-            "Previous Exam Score · 0–100",
-            min_value=0.0,
-            max_value=100.0,
-            step=1.0,
-            key="previous_exam_score",
+        previous_exam_score = (
+            input_card(
+                category=(
+                    "Academic History"
+                ),
+
+                title=(
+                    "Previous Exam"
+                ),
+
+                range_text=(
+                    "Score · 0–100"
+                ),
+
+                key=(
+                    "previous_exam_score"
+                ),
+
+                min_value=0.0,
+                max_value=100.0,
+                step=1.0,
+
+                display_format="%.0f",
+            )
         )
 
 
-        attendance_percentage = st.number_input(
-            "Attendance · 0–100%",
-            min_value=0.0,
-            max_value=100.0,
-            step=1.0,
-            key="attendance_percentage",
+    with card2:
+
+        previous_gpa = (
+            input_card(
+                category=(
+                    "Academic History"
+                ),
+
+                title=(
+                    "Previous GPA"
+                ),
+
+                range_text=(
+                    "GPA · 0–4.0"
+                ),
+
+                key=(
+                    "previous_gpa"
+                ),
+
+                min_value=0.0,
+                max_value=4.0,
+                step=0.1,
+
+                display_format="%.1f",
+            )
         )
 
 
-        study_hours_per_day = st.number_input(
-            "Study Hours per Day · 0–12",
-            min_value=0.0,
-            max_value=12.0,
-            step=0.5,
-            key="study_hours_per_day",
+    with card3:
+
+        attendance_percentage = (
+            input_card(
+                category=(
+                    "Engagement"
+                ),
+
+                title=(
+                    "Attendance"
+                ),
+
+                range_text=(
+                    "Percent · 0–100"
+                ),
+
+                key=(
+                    "attendance_percentage"
+                ),
+
+                min_value=0.0,
+                max_value=100.0,
+                step=1.0,
+
+                display_format="%.0f",
+            )
         )
 
 
-    with input2:
+    # --------------------------------------------------------
+    # SECOND ROW
+    # --------------------------------------------------------
 
-        previous_gpa = st.number_input(
-            "Previous GPA · 0–4.0",
-            min_value=0.0,
-            max_value=4.0,
-            step=0.1,
-            key="previous_gpa",
+    card4, card5, card6 = (
+        st.columns(3)
+    )
+
+
+    with card4:
+
+        assignment_completion_rate = (
+            input_card(
+                category=(
+                    "Engagement"
+                ),
+
+                title=(
+                    "Assignments"
+                ),
+
+                range_text=(
+                    "Completion · 0–100%"
+                ),
+
+                key=(
+                    "assignment_completion_rate"
+                ),
+
+                min_value=0.0,
+                max_value=100.0,
+                step=1.0,
+
+                display_format="%.0f",
+            )
         )
 
 
-        assignment_completion_rate = st.number_input(
-            "Assignment Completion · 0–100%",
-            min_value=0.0,
-            max_value=100.0,
-            step=1.0,
-            key="assignment_completion_rate",
+    with card5:
+
+        study_hours_per_day = (
+            input_card(
+                category=(
+                    "Preparation"
+                ),
+
+                title=(
+                    "Study Hours"
+                ),
+
+                range_text=(
+                    "Hours/day · 0–12"
+                ),
+
+                key=(
+                    "study_hours_per_day"
+                ),
+
+                min_value=0.0,
+                max_value=12.0,
+                step=0.5,
+
+                display_format="%.1f",
+            )
         )
 
 
-        practice_tests_completed = st.number_input(
-            "Practice Tests · 0–17",
-            min_value=0,
-            max_value=17,
-            step=1,
-            key="practice_tests_completed",
+    with card6:
+
+        practice_tests_completed = (
+            input_card(
+                category=(
+                    "Preparation"
+                ),
+
+                title=(
+                    "Practice Tests"
+                ),
+
+                range_text=(
+                    "Completed · 0–17"
+                ),
+
+                key=(
+                    "practice_tests_completed"
+                ),
+
+                min_value=0,
+                max_value=17,
+                step=1,
+            )
         )
 
 
@@ -673,83 +1039,149 @@ with left_panel:
 
 
 # ============================================================
-# INPUT PROFILE
+# LIVE RADAR PROFILE
 # ============================================================
 
-with right_panel:
+with profile_panel:
 
     section_title(
         "chart",
-        "Input Profile",
+        "Student Profile",
     )
 
 
-    profile_df = pd.DataFrame(
-        {
-            "Feature": [
-                "Previous Exam",
-                "GPA",
-                "Attendance",
-                "Assignments",
-                "Study Hours",
-                "Practice Tests",
-            ],
+    radar_labels = [
+        "Previous Exam",
+        "GPA",
+        "Attendance",
+        "Assignments",
+        "Study Hours",
+        "Practice Tests",
+    ]
 
-            "Percentage": [
-                previous_exam_score,
-                (previous_gpa / 4.0) * 100,
-                attendance_percentage,
-                assignment_completion_rate,
-                (study_hours_per_day / 12.0) * 100,
-                (practice_tests_completed / 17.0) * 100,
-            ],
-        }
+
+    radar_values = [
+        previous_exam_score,
+
+        (
+            previous_gpa
+            / 4.0
+        ) * 100,
+
+        attendance_percentage,
+
+        assignment_completion_rate,
+
+        (
+            study_hours_per_day
+            / 12.0
+        ) * 100,
+
+        (
+            practice_tests_completed
+            / 17.0
+        ) * 100,
+    ]
+
+
+    radar_labels_closed = (
+        radar_labels
+        + [
+            radar_labels[0]
+        ]
     )
 
 
-    fig_profile = px.bar(
-        profile_df,
-        x="Percentage",
-        y="Feature",
-        orientation="h",
-        text="Percentage",
+    radar_values_closed = (
+        radar_values
+        + [
+            radar_values[0]
+        ]
     )
 
 
-    fig_profile.update_traces(
-        marker_color=accent,
-        texttemplate="%{text:.0f}%",
-        textposition="outside",
+    fig_profile = go.Figure()
+
+
+    fig_profile.add_trace(
+        go.Scatterpolar(
+            r=radar_values_closed,
+
+            theta=(
+                radar_labels_closed
+            ),
+
+            fill="toself",
+
+            line=dict(
+                color=accent,
+                width=2,
+            ),
+
+            marker=dict(
+                color=accent,
+                size=6,
+            ),
+
+            hovertemplate=(
+                "%{theta}: "
+                "%{r:.0f}%"
+                "<extra></extra>"
+            ),
+        )
     )
 
 
     fig_profile.update_layout(
-        height=270,
+        template=plotly_template,
+
+        height=395,
 
         margin=dict(
-            l=5,
+            l=35,
             r=35,
-            t=0,
+            t=20,
             b=25,
         ),
 
-        xaxis=dict(
-            range=[0, 105],
-            title="Normalized Level (%)",
-            ticksuffix="%",
-        ),
+        polar=dict(
+            bgcolor=background,
 
-        yaxis=dict(
-            title="",
-            autorange="reversed",
+            radialaxis=dict(
+                visible=True,
+
+                range=[
+                    0,
+                    100,
+                ],
+
+                tickvals=[
+                    25,
+                    50,
+                    75,
+                    100,
+                ],
+
+                ticksuffix="%",
+
+                gridcolor=border,
+
+                color=muted,
+            ),
+
+            angularaxis=dict(
+                gridcolor=border,
+                color=text_color,
+            ),
         ),
 
         showlegend=False,
-    )
 
+        paper_bgcolor=background,
 
-    style_chart(
-        fig_profile
+        font=dict(
+            color=text_color
+        ),
     )
 
 
@@ -759,8 +1191,14 @@ with right_panel:
         theme=None,
         config={
             "displayModeBar":
-                False,
+                False
         },
+    )
+
+
+    st.caption(
+        "Each input is normalized to a 0–100 scale "
+        "for profile visualization only."
     )
 
 
@@ -811,23 +1249,33 @@ if predict_button:
         result
     )
 
-    st.session_state.scenario_result = None
-
-
-    st.session_state.sim_attendance = float(
-        attendance_percentage
+    st.session_state.scenario_result = (
+        None
     )
 
-    st.session_state.sim_assignments = float(
-        assignment_completion_rate
+
+    st.session_state.sim_attendance = (
+        float(
+            attendance_percentage
+        )
     )
 
-    st.session_state.sim_study_hours = float(
-        study_hours_per_day
+    st.session_state.sim_assignments = (
+        float(
+            assignment_completion_rate
+        )
     )
 
-    st.session_state.sim_practice_tests = int(
-        practice_tests_completed
+    st.session_state.sim_study_hours = (
+        float(
+            study_hours_per_day
+        )
+    )
+
+    st.session_state.sim_practice_tests = (
+        int(
+            practice_tests_completed
+        )
     )
 
 
@@ -840,7 +1288,10 @@ if predict_button:
 # RESULTS
 # ============================================================
 
-if st.session_state.prediction_result is not None:
+if (
+    st.session_state.prediction_result
+    is not None
+):
 
     result = (
         st.session_state.prediction_result
@@ -852,19 +1303,29 @@ if st.session_state.prediction_result is not None:
 
 
     predicted_score = float(
-        result["predicted_score"]
+        result[
+            "predicted_score"
+        ]
     )
+
 
     predicted_status = str(
-        result["predicted_status"]
+        result[
+            "predicted_status"
+        ]
     )
+
 
     pass_probability = float(
-        result["pass_probability"]
+        result[
+            "pass_probability"
+        ]
     )
 
+
     probability_percent = (
-        pass_probability * 100
+        pass_probability
+        * 100
     )
 
 
@@ -891,7 +1352,9 @@ if st.session_state.prediction_result is not None:
             "prediction-results-anchor"
         )
 
-        st.session_state.scroll_target = None
+        st.session_state.scroll_target = (
+            None
+        )
 
 
     # ========================================================
@@ -987,7 +1450,7 @@ if st.session_state.prediction_result is not None:
 
 
     # ========================================================
-    # VISUAL RESULT DASHBOARD
+    # PREDICTION DASHBOARD
     # ========================================================
 
     section_title(
@@ -996,7 +1459,9 @@ if st.session_state.prediction_result is not None:
     )
 
 
-    gauge1, gauge2 = st.columns(2)
+    gauge1, gauge2 = (
+        st.columns(2)
+    )
 
 
     # --------------------------------------------------------
@@ -1005,45 +1470,58 @@ if st.session_state.prediction_result is not None:
 
     with gauge1:
 
-        fig_score_gauge = go.Figure(
-            go.Indicator(
-                mode="gauge+number",
+        fig_score_gauge = (
+            go.Figure(
+                go.Indicator(
+                    mode="gauge+number",
 
-                value=predicted_score,
+                    value=predicted_score,
 
-                number={
-                    "suffix":
-                        " / 100"
-                },
+                    number={
+                        "suffix":
+                            " / 100",
 
-                title={
-                    "text":
-                        "Predicted Exam Score"
-                },
-
-                gauge={
-                    "axis": {
-                        "range":
-                            [0, 100]
+                        "font": {
+                            "size":
+                                36
+                        },
                     },
 
-                    "bar": {
-                        "color":
-                            accent
+                    title={
+                        "text":
+                            "Predicted Exam Score"
                     },
 
-                    "bgcolor":
-                        surface,
+                    gauge={
+                        "axis": {
+                            "range":
+                                [
+                                    0,
+                                    100,
+                                ]
+                        },
 
-                    "bordercolor":
-                        border,
-                },
+                        "bar": {
+                            "color":
+                                accent,
+
+                            "thickness":
+                                0.22,
+                        },
+
+                        "bgcolor":
+                            surface,
+
+                        "bordercolor":
+                            border,
+                    },
+                )
             )
         )
 
 
         fig_score_gauge.update_layout(
-            height=225,
+            height=215,
 
             margin=dict(
                 l=30,
@@ -1052,7 +1530,9 @@ if st.session_state.prediction_result is not None:
                 b=5,
             ),
 
-            paper_bgcolor=background,
+            paper_bgcolor=(
+                background
+            ),
 
             font=dict(
                 color=text_color
@@ -1064,73 +1544,90 @@ if st.session_state.prediction_result is not None:
             fig_score_gauge,
             width="stretch",
             theme=None,
+
             config={
                 "displayModeBar":
-                    False,
+                    False
             },
         )
 
 
     # --------------------------------------------------------
-    # PROBABILITY GAUGE
+    # PASS PROBABILITY GAUGE
     # --------------------------------------------------------
 
     with gauge2:
 
-        fig_probability_gauge = go.Figure(
-            go.Indicator(
-                mode="gauge+number",
+        fig_probability_gauge = (
+            go.Figure(
+                go.Indicator(
+                    mode="gauge+number",
 
-                value=probability_percent,
+                    value=(
+                        probability_percent
+                    ),
 
-                number={
-                    "suffix":
-                        "%"
-                },
+                    number={
+                        "suffix":
+                            "%",
 
-                title={
-                    "text":
-                        "Pass Probability"
-                },
-
-                gauge={
-                    "axis": {
-                        "range":
-                            [0, 100]
+                        "font": {
+                            "size":
+                                36
+                        },
                     },
 
-                    "bar": {
-                        "color":
-                            accent
+                    title={
+                        "text":
+                            "Pass Probability"
                     },
 
-                    "bgcolor":
-                        surface,
-
-                    "bordercolor":
-                        border,
-
-                    "threshold": {
-                        "line": {
-                            "color":
-                                muted,
-                            "width":
-                                3,
+                    gauge={
+                        "axis": {
+                            "range":
+                                [
+                                    0,
+                                    100,
+                                ]
                         },
 
-                        "thickness":
-                            0.75,
+                        "bar": {
+                            "color":
+                                accent,
 
-                        "value":
-                            50,
+                            "thickness":
+                                0.22,
+                        },
+
+                        "bgcolor":
+                            surface,
+
+                        "bordercolor":
+                            border,
+
+                        "threshold": {
+                            "line": {
+                                "color":
+                                    muted,
+
+                                "width":
+                                    3,
+                            },
+
+                            "thickness":
+                                0.70,
+
+                            "value":
+                                50,
+                        },
                     },
-                },
+                )
             )
         )
 
 
         fig_probability_gauge.update_layout(
-            height=225,
+            height=215,
 
             margin=dict(
                 l=30,
@@ -1139,7 +1636,9 @@ if st.session_state.prediction_result is not None:
                 b=5,
             ),
 
-            paper_bgcolor=background,
+            paper_bgcolor=(
+                background
+            ),
 
             font=dict(
                 color=text_color
@@ -1151,15 +1650,16 @@ if st.session_state.prediction_result is not None:
             fig_probability_gauge,
             width="stretch",
             theme=None,
+
             config={
                 "displayModeBar":
-                    False,
+                    False
             },
         )
 
 
     # ========================================================
-    # RESULT SUMMARY TABLE
+    # RESULT SUMMARY
     # ========================================================
 
     summary_html = f"""
@@ -1200,16 +1700,16 @@ if st.session_state.prediction_result is not None:
     </table>
     """
 
+
     st.html(
         summary_html
     )
 
 
-    # ========================================================
-    # OUTCOME MESSAGE
-    # ========================================================
-
-    if predicted_status.lower() == "pass":
+    if (
+        predicted_status.lower()
+        == "pass"
+    ):
 
         st.success(
             f"PASS predicted · "
@@ -1230,7 +1730,9 @@ if st.session_state.prediction_result is not None:
     # THRESHOLD + SCORE RANGE
     # ========================================================
 
-    threshold_col, range_col = st.columns(2)
+    threshold_col, range_col = (
+        st.columns(2)
+    )
 
 
     # --------------------------------------------------------
@@ -1245,23 +1747,33 @@ if st.session_state.prediction_result is not None:
         )
 
 
-        distance_from_threshold = abs(
-            probability_percent
-            - 50
+        distance_from_threshold = (
+            abs(
+                probability_percent
+                - 50
+            )
         )
 
 
-        if distance_from_threshold < 10:
+        if (
+            distance_from_threshold
+            < 10
+        ):
 
             threshold_label = (
                 "Close to Boundary"
             )
 
-        elif distance_from_threshold < 20:
+
+        elif (
+            distance_from_threshold
+            < 20
+        ):
 
             threshold_label = (
                 "Moderate Separation"
             )
+
 
         else:
 
@@ -1270,7 +1782,9 @@ if st.session_state.prediction_result is not None:
             )
 
 
-        fig_threshold = go.Figure()
+        fig_threshold = (
+            go.Figure()
+        )
 
 
         fig_threshold.add_trace(
@@ -1285,32 +1799,26 @@ if st.session_state.prediction_result is not None:
 
                 orientation="h",
 
-                marker=dict(
-                    color=accent
-                ),
+                marker_color=accent,
 
                 text=[
                     f"{probability_percent:.1f}%"
                 ],
 
                 textposition="inside",
-
-                hovertemplate=(
-                    f"Pass probability: "
-                    f"{probability_percent:.1f}%"
-                    "<extra></extra>"
-                ),
             )
         )
 
 
         fig_threshold.add_vline(
             x=50,
+
             line_dash="dash",
+
             line_color=muted,
 
             annotation_text=(
-                "50% decision threshold"
+                "50% threshold"
             ),
 
             annotation_position=(
@@ -1336,6 +1844,7 @@ if st.session_state.prediction_result is not None:
                 ],
 
                 ticksuffix="%",
+
                 title="",
             ),
 
@@ -1354,9 +1863,10 @@ if st.session_state.prediction_result is not None:
             fig_threshold,
             width="stretch",
             theme=None,
+
             config={
                 "displayModeBar":
-                    False,
+                    False
             },
         )
 
@@ -1385,6 +1895,7 @@ if st.session_state.prediction_result is not None:
             - MODEL_MAE,
         )
 
+
         upper_score = min(
             100,
             predicted_score
@@ -1392,7 +1903,9 @@ if st.session_state.prediction_result is not None:
         )
 
 
-        fig_range = go.Figure()
+        fig_range = (
+            go.Figure()
+        )
 
 
         fig_range.add_trace(
@@ -1429,16 +1942,13 @@ if st.session_state.prediction_result is not None:
                     1
                 ],
 
-                mode="markers+text",
+                mode=(
+                    "markers+text"
+                ),
 
                 marker=dict(
                     size=15,
                     color=accent,
-
-                    line=dict(
-                        width=2,
-                        color=background,
-                    ),
                 ),
 
                 text=[
@@ -1470,11 +1980,14 @@ if st.session_state.prediction_result is not None:
                     100,
                 ],
 
-                title="Exam Score",
+                title=(
+                    "Exam Score"
+                ),
             ),
 
             yaxis=dict(
                 visible=False,
+
                 range=[
                     0.78,
                     1.22,
@@ -1494,9 +2007,10 @@ if st.session_state.prediction_result is not None:
             fig_range,
             width="stretch",
             theme=None,
+
             config={
                 "displayModeBar":
-                    False,
+                    False
             },
         )
 
@@ -1509,89 +2023,285 @@ if st.session_state.prediction_result is not None:
 
 
     # ========================================================
-    # MODEL INTERPRETATION
+    # LOCAL PREDICTION EXPLANATION
     # ========================================================
 
     section_title(
         "brain",
-        "How the Models Interpreted This Profile",
+        "What Influenced This Prediction?",
     )
 
 
-    model_left, model_right = st.columns(2)
+    linear_contributions = (
+        model_contributions(
+            linear_model,
+            baseline_inputs,
+            logistic=False,
+        )
+    )
 
 
-    with model_left:
+    logistic_contributions = (
+        model_contributions(
+            logistic_model,
+            baseline_inputs,
+            logistic=True,
+        )
+    )
 
-        st.html(
-            f"""
-            <div class="interpretation-box">
 
-                <div class="interpretation-title">
-                    Linear Regression
-                </div>
+    influence_left, influence_right = (
+        st.columns(2)
+    )
 
-                <div class="interpretation-text">
 
-                    Six academic inputs
-                    <br>
-                    ↓
-                    <br><br>
+    # --------------------------------------------------------
+    # SCORE CONTRIBUTIONS
+    # --------------------------------------------------------
 
-                    <b>
-                    Predicted score:
-                    {predicted_score:.1f} / 100
-                    </b>
+    with influence_left:
 
-                    <br><br>
-
-                    Typical MAE:
-                    {MODEL_MAE:.2f} points
-
-                </div>
-
-            </div>
-            """
+        st.markdown(
+            "#### Score Prediction"
         )
 
 
-    with model_right:
-
-        st.html(
-            f"""
-            <div class="interpretation-box">
-
-                <div class="interpretation-title">
-                    Balanced Logistic Regression
-                </div>
-
-                <div class="interpretation-text">
-
-                    Same six academic inputs
-                    <br>
-                    ↓
-                    <br><br>
-
-                    <b>
-                    {predicted_status} ·
-                    {probability_percent:.1f}%
-                    pass probability
-                    </b>
-
-                    <br><br>
-
-                    Balanced Accuracy:
-                    {CLASSIFICATION_BALANCED_ACCURACY:.1f}%
-
-                </div>
-
-            </div>
-            """
+        linear_plot = (
+            linear_contributions
+            .sort_values(
+                "Contribution"
+            )
         )
+
+
+        linear_colors = [
+            (
+                positive_color
+                if value >= 0
+                else negative_color
+            )
+            for value in (
+                linear_plot[
+                    "Contribution"
+                ]
+            )
+        ]
+
+
+        fig_linear_influence = (
+            go.Figure(
+                go.Bar(
+                    x=linear_plot[
+                        "Contribution"
+                    ],
+
+                    y=linear_plot[
+                        "Feature"
+                    ],
+
+                    orientation="h",
+
+                    marker_color=(
+                        linear_colors
+                    ),
+
+                    text=[
+                        f"{value:+.2f}"
+                        for value in (
+                            linear_plot[
+                                "Contribution"
+                            ]
+                        )
+                    ],
+
+                    textposition=(
+                        "outside"
+                    ),
+                )
+            )
+        )
+
+
+        fig_linear_influence.add_vline(
+            x=0,
+
+            line_color=muted,
+
+            line_dash="dash",
+        )
+
+
+        fig_linear_influence.update_layout(
+            height=335,
+
+            margin=dict(
+                l=15,
+                r=55,
+                t=5,
+                b=35,
+            ),
+
+            xaxis_title=(
+                "Contribution to Predicted Score"
+            ),
+
+            yaxis_title="",
+
+            showlegend=False,
+        )
+
+
+        style_chart(
+            fig_linear_influence
+        )
+
+
+        st.plotly_chart(
+            fig_linear_influence,
+            width="stretch",
+            theme=None,
+
+            config={
+                "displayModeBar":
+                    False
+            },
+        )
+
+
+        st.caption(
+            "Positive values raise the score estimate relative "
+            "to the model baseline; negative values lower it."
+        )
+
+
+    # --------------------------------------------------------
+    # CLASSIFICATION CONTRIBUTIONS
+    # --------------------------------------------------------
+
+    with influence_right:
+
+        st.markdown(
+            "#### Pass / Fail Prediction"
+        )
+
+
+        logistic_plot = (
+            logistic_contributions
+            .sort_values(
+                "Contribution"
+            )
+        )
+
+
+        logistic_colors = [
+            (
+                positive_color
+                if value >= 0
+                else negative_color
+            )
+            for value in (
+                logistic_plot[
+                    "Contribution"
+                ]
+            )
+        ]
+
+
+        fig_logistic_influence = (
+            go.Figure(
+                go.Bar(
+                    x=logistic_plot[
+                        "Contribution"
+                    ],
+
+                    y=logistic_plot[
+                        "Feature"
+                    ],
+
+                    orientation="h",
+
+                    marker_color=(
+                        logistic_colors
+                    ),
+
+                    text=[
+                        f"{value:+.2f}"
+                        for value in (
+                            logistic_plot[
+                                "Contribution"
+                            ]
+                        )
+                    ],
+
+                    textposition=(
+                        "outside"
+                    ),
+                )
+            )
+        )
+
+
+        fig_logistic_influence.add_vline(
+            x=0,
+
+            line_color=muted,
+
+            line_dash="dash",
+        )
+
+
+        fig_logistic_influence.update_layout(
+            height=335,
+
+            margin=dict(
+                l=15,
+                r=55,
+                t=5,
+                b=35,
+            ),
+
+            xaxis_title=(
+                "Contribution to Pass Log-Odds"
+            ),
+
+            yaxis_title="",
+
+            showlegend=False,
+        )
+
+
+        style_chart(
+            fig_logistic_influence
+        )
+
+
+        st.plotly_chart(
+            fig_logistic_influence,
+            width="stretch",
+            theme=None,
+
+            config={
+                "displayModeBar":
+                    False
+            },
+        )
+
+
+        st.caption(
+            "Positive values push the classifier toward Pass; "
+            "negative values push it toward Fail."
+        )
+
+
+    st.info(
+        "These charts explain how the trained models used this "
+        "specific student profile. They describe model behavior "
+        "and associations, not causal effects."
+    )
 
 
     # ========================================================
-    # SCENARIO SIMULATOR
+    # IMPROVEMENT SCENARIO SIMULATOR
     # ========================================================
 
     section_title(
@@ -1607,42 +2317,62 @@ if st.session_state.prediction_result is not None:
 
 
     # --------------------------------------------------------
-    # SCENARIO DEFAULTS
+    # DEFAULT SCENARIO VALUES
     # --------------------------------------------------------
 
-    if "sim_attendance" not in st.session_state:
+    if (
+        "sim_attendance"
+        not in st.session_state
+    ):
 
-        st.session_state.sim_attendance = float(
-            baseline_inputs[
-                "attendance_percentage"
-            ]
+        st.session_state.sim_attendance = (
+            float(
+                baseline_inputs[
+                    "attendance_percentage"
+                ]
+            )
         )
 
 
-    if "sim_assignments" not in st.session_state:
+    if (
+        "sim_assignments"
+        not in st.session_state
+    ):
 
-        st.session_state.sim_assignments = float(
-            baseline_inputs[
-                "assignment_completion_rate"
-            ]
+        st.session_state.sim_assignments = (
+            float(
+                baseline_inputs[
+                    "assignment_completion_rate"
+                ]
+            )
         )
 
 
-    if "sim_study_hours" not in st.session_state:
+    if (
+        "sim_study_hours"
+        not in st.session_state
+    ):
 
-        st.session_state.sim_study_hours = float(
-            baseline_inputs[
-                "study_hours_per_day"
-            ]
+        st.session_state.sim_study_hours = (
+            float(
+                baseline_inputs[
+                    "study_hours_per_day"
+                ]
+            )
         )
 
 
-    if "sim_practice_tests" not in st.session_state:
+    if (
+        "sim_practice_tests"
+        not in st.session_state
+    ):
 
-        st.session_state.sim_practice_tests = int(
-            baseline_inputs[
-                "practice_tests_completed"
-            ]
+        st.session_state.sim_practice_tests = (
+            int(
+                baseline_inputs[
+                    "practice_tests_completed"
+                ]
+            )
         )
 
 
@@ -1664,52 +2394,78 @@ if st.session_state.prediction_result is not None:
 
         with sim_col1:
 
-            sim_attendance = st.number_input(
-                "Attendance · 0–100%",
-                min_value=0.0,
-                max_value=100.0,
-                step=1.0,
-                key="sim_attendance",
+            sim_attendance = (
+                st.number_input(
+                    "Attendance · 0–100%",
+
+                    min_value=0.0,
+                    max_value=100.0,
+                    step=1.0,
+
+                    key=(
+                        "sim_attendance"
+                    ),
+                )
             )
 
 
         with sim_col2:
 
-            sim_assignments = st.number_input(
-                "Assignments · 0–100%",
-                min_value=0.0,
-                max_value=100.0,
-                step=1.0,
-                key="sim_assignments",
+            sim_assignments = (
+                st.number_input(
+                    "Assignments · 0–100%",
+
+                    min_value=0.0,
+                    max_value=100.0,
+                    step=1.0,
+
+                    key=(
+                        "sim_assignments"
+                    ),
+                )
             )
 
 
         with sim_col3:
 
-            sim_study_hours = st.number_input(
-                "Study Hours · 0–12",
-                min_value=0.0,
-                max_value=12.0,
-                step=0.5,
-                key="sim_study_hours",
+            sim_study_hours = (
+                st.number_input(
+                    "Study Hours · 0–12",
+
+                    min_value=0.0,
+                    max_value=12.0,
+                    step=0.5,
+
+                    key=(
+                        "sim_study_hours"
+                    ),
+                )
             )
 
 
         with sim_col4:
 
-            sim_practice_tests = st.number_input(
-                "Practice Tests · 0–17",
-                min_value=0,
-                max_value=17,
-                step=1,
-                key="sim_practice_tests",
+            sim_practice_tests = (
+                st.number_input(
+                    "Practice Tests · 0–17",
+
+                    min_value=0,
+                    max_value=17,
+                    step=1,
+
+                    key=(
+                        "sim_practice_tests"
+                    ),
+                )
             )
 
 
         simulate_button = (
             st.form_submit_button(
                 "Simulate Scenario",
+
                 type="primary",
+
                 width="stretch",
             )
         )
@@ -1777,7 +2533,10 @@ if st.session_state.prediction_result is not None:
     # SCENARIO RESULT
     # ========================================================
 
-    if st.session_state.scenario_result is not None:
+    if (
+        st.session_state.scenario_result
+        is not None
+    ):
 
         st.html(
             """
@@ -1798,18 +2557,22 @@ if st.session_state.prediction_result is not None:
                 "scenario-results-anchor"
             )
 
-            st.session_state.scroll_target = None
+            st.session_state.scroll_target = (
+                None
+            )
 
 
         scenario_data = (
             st.session_state.scenario_result
         )
 
+
         scenario_prediction = (
             scenario_data[
                 "prediction"
             ]
         )
+
 
         scenario_inputs = (
             scenario_data[
@@ -1873,7 +2636,7 @@ if st.session_state.prediction_result is not None:
 
 
         # ====================================================
-        # DETECT WHETHER USER ACTUALLY CHANGED INPUTS
+        # DETECT INPUT CHANGES
         # ====================================================
 
         scenario_changed = any(
@@ -2010,7 +2773,7 @@ if st.session_state.prediction_result is not None:
 
 
         # ====================================================
-        # IF NOTHING CHANGED
+        # NO CHANGE MESSAGE
         # ====================================================
 
         if not scenario_changed:
@@ -2019,16 +2782,15 @@ if st.session_state.prediction_result is not None:
                 """
                 <div class="no-change-box">
 
-                    <div class="no-change-title">
+                    <b>
                         No scenario changes detected
-                    </div>
+                    </b>
 
-                    <div class="no-change-text">
-                        The scenario inputs are identical to the current
-                        student profile. Adjust one or more values above
-                        and run the simulator again to compare a different
-                        model prediction.
-                    </div>
+                    <br>
+
+                    The scenario inputs are identical to the
+                    current student profile. Adjust one or more
+                    values above and run the simulator again.
 
                 </div>
                 """
@@ -2036,132 +2798,94 @@ if st.session_state.prediction_result is not None:
 
 
         # ====================================================
-        # SHOW CHARTS ONLY IF INPUTS CHANGED
+        # SCENARIO VISUALS
         # ====================================================
 
         else:
 
-            scenario_visual1, scenario_visual2 = (
-                st.columns(2)
-            )
+            (
+                scenario_visual1,
+                scenario_visual2,
+            ) = st.columns(2)
 
 
             # ------------------------------------------------
-            # OUTPUT BEFORE VS AFTER
+            # OUTPUT CHANGE
             # ------------------------------------------------
 
             with scenario_visual1:
 
-                scenario_output_df = pd.DataFrame(
-                    {
-                        "State": [
-                            "Current",
-                            "Scenario",
-                        ],
+                scenario_output_df = (
+                    pd.DataFrame(
+                        {
+                            "State": [
+                                "Current",
+                                "Scenario",
+                            ],
 
-                        "Score": [
-                            predicted_score,
-                            scenario_score,
-                        ],
+                            "Score": [
+                                predicted_score,
+                                scenario_score,
+                            ],
 
-                        "Pass Probability": [
-                            probability_percent,
-                            scenario_probability,
-                        ],
-                    }
+                            "Pass Probability": [
+                                probability_percent,
+                                scenario_probability,
+                            ],
+                        }
+                    )
                 )
 
 
                 scenario_output_long = (
-                    scenario_output_df.melt(
-                        id_vars="State",
+                    scenario_output_df
+                    .melt(
+                        id_vars=(
+                            "State"
+                        ),
 
                         value_vars=[
                             "Score",
                             "Pass Probability",
                         ],
 
-                        var_name="Metric",
-                        value_name="Value",
-                    )
-                )
-
-
-                fig_scenario_output = go.Figure()
-
-
-                current_output = (
-                    scenario_output_long[
-                        scenario_output_long[
-                            "State"
-                        ] == "Current"
-                    ]
-                )
-
-                scenario_output = (
-                    scenario_output_long[
-                        scenario_output_long[
-                            "State"
-                        ] == "Scenario"
-                    ]
-                )
-
-
-                fig_scenario_output.add_trace(
-                    go.Bar(
-                        x=current_output[
+                        var_name=(
                             "Metric"
-                        ],
-
-                        y=current_output[
-                            "Value"
-                        ],
-
-                        name="Current",
-
-                        marker_color=muted,
-
-                        text=current_output[
-                            "Value"
-                        ],
-
-                        texttemplate=(
-                            "%{text:.1f}"
                         ),
 
-                        textposition=(
-                            "outside"
+                        value_name=(
+                            "Value"
                         ),
                     )
                 )
 
 
-                fig_scenario_output.add_trace(
-                    go.Bar(
-                        x=scenario_output[
-                            "Metric"
-                        ],
+                fig_scenario_output = (
+                    px.bar(
+                        scenario_output_long,
 
-                        y=scenario_output[
-                            "Value"
-                        ],
+                        x="Metric",
+                        y="Value",
 
-                        name="Scenario",
+                        color="State",
 
-                        marker_color=accent,
-
-                        text=scenario_output[
-                            "Value"
-                        ],
-
-                        texttemplate=(
-                            "%{text:.1f}"
+                        barmode=(
+                            "group"
                         ),
 
-                        textposition=(
-                            "outside"
-                        ),
+                        text="Value",
                     )
+                )
+
+
+                fig_scenario_output.update_traces(
+                    texttemplate=(
+                        "%{text:.1f}"
+                    ),
+
+                    textposition=(
+                        "outside"
+                    ),
                 )
 
 
@@ -2179,18 +2903,18 @@ if st.session_state.prediction_result is not None:
                         text=(
                             "Prediction Before vs Scenario"
                         ),
+
                         font=dict(
                             size=14
                         ),
                     ),
-
-                    barmode="group",
 
                     yaxis=dict(
                         range=[
                             0,
                             100,
                         ],
+
                         title="Value",
                     ),
 
@@ -2209,112 +2933,121 @@ if st.session_state.prediction_result is not None:
                     fig_scenario_output,
                     width="stretch",
                     theme=None,
+
                     config={
                         "displayModeBar":
-                            False,
+                            False
                     },
                 )
 
 
             # ------------------------------------------------
-            # INPUT BEFORE VS AFTER
+            # INPUT CHANGE
             # ------------------------------------------------
 
             with scenario_visual2:
 
-                input_comparison_df = pd.DataFrame(
-                    {
-                        "Feature": [
-                            "Attendance",
-                            "Assignments",
-                            "Study Hours",
-                            "Practice Tests",
-                        ],
-
-                        "Current": [
-                            baseline_inputs[
-                                "attendance_percentage"
+                input_comparison_df = (
+                    pd.DataFrame(
+                        {
+                            "Feature": [
+                                "Attendance",
+                                "Assignments",
+                                "Study Hours",
+                                "Practice Tests",
                             ],
 
-                            baseline_inputs[
-                                "assignment_completion_rate"
-                            ],
-
-                            (
+                            "Current": [
                                 baseline_inputs[
-                                    "study_hours_per_day"
-                                ]
-                                / 12
-                            ) * 100,
+                                    "attendance_percentage"
+                                ],
 
-                            (
                                 baseline_inputs[
-                                    "practice_tests_completed"
-                                ]
-                                / 17
-                            ) * 100,
-                        ],
+                                    "assignment_completion_rate"
+                                ],
 
-                        "Scenario": [
-                            scenario_inputs[
-                                "attendance_percentage"
+                                (
+                                    baseline_inputs[
+                                        "study_hours_per_day"
+                                    ]
+                                    / 12
+                                )
+                                * 100,
+
+                                (
+                                    baseline_inputs[
+                                        "practice_tests_completed"
+                                    ]
+                                    / 17
+                                )
+                                * 100,
                             ],
 
-                            scenario_inputs[
-                                "assignment_completion_rate"
+                            "Scenario": [
+                                scenario_inputs[
+                                    "attendance_percentage"
+                                ],
+
+                                scenario_inputs[
+                                    "assignment_completion_rate"
+                                ],
+
+                                (
+                                    scenario_inputs[
+                                        "study_hours_per_day"
+                                    ]
+                                    / 12
+                                )
+                                * 100,
+
+                                (
+                                    scenario_inputs[
+                                        "practice_tests_completed"
+                                    ]
+                                    / 17
+                                )
+                                * 100,
                             ],
-
-                            (
-                                scenario_inputs[
-                                    "study_hours_per_day"
-                                ]
-                                / 12
-                            ) * 100,
-
-                            (
-                                scenario_inputs[
-                                    "practice_tests_completed"
-                                ]
-                                / 17
-                            ) * 100,
-                        ],
-                    }
-                )
-
-
-                fig_input_change = go.Figure()
-
-
-                fig_input_change.add_trace(
-                    go.Bar(
-                        x=input_comparison_df[
-                            "Feature"
-                        ],
-
-                        y=input_comparison_df[
-                            "Current"
-                        ],
-
-                        name="Current",
-
-                        marker_color=muted,
+                        }
                     )
                 )
 
 
-                fig_input_change.add_trace(
-                    go.Bar(
-                        x=input_comparison_df[
+                input_long = (
+                    input_comparison_df
+                    .melt(
+                        id_vars=(
                             "Feature"
+                        ),
+
+                        value_vars=[
+                            "Current",
+                            "Scenario",
                         ],
 
-                        y=input_comparison_df[
-                            "Scenario"
-                        ],
+                        var_name=(
+                            "State"
+                        ),
 
-                        name="Scenario",
+                        value_name=(
+                            "Level"
+                        ),
+                    )
+                )
 
-                        marker_color=accent,
+
+                fig_input_change = (
+                    px.bar(
+                        input_long,
+
+                        x="Feature",
+                        y="Level",
+
+                        color="State",
+
+                        barmode=(
+                            "group"
+                        ),
                     )
                 )
 
@@ -2333,14 +3066,11 @@ if st.session_state.prediction_result is not None:
                         text=(
                             "Input Changes"
                         ),
+
                         font=dict(
                             size=14
                         ),
                     ),
-
-                    barmode="group",
-
-                    xaxis_title="",
 
                     yaxis=dict(
                         range=[
@@ -2355,6 +3085,8 @@ if st.session_state.prediction_result is not None:
                         ticksuffix="%",
                     ),
 
+                    xaxis_title="",
+
                     legend_title="",
                 )
 
@@ -2368,9 +3100,10 @@ if st.session_state.prediction_result is not None:
                     fig_input_change,
                     width="stretch",
                     theme=None,
+
                     config={
                         "displayModeBar":
-                            False,
+                            False
                     },
                 )
 
@@ -2421,7 +3154,7 @@ if st.session_state.prediction_result is not None:
 
         st.markdown(
             """
-            **Six inputs are supplied to two separate models:**
+            **Six inputs → two independent prediction models**
 
             **Linear Regression →** predicted exam score
 
@@ -2433,8 +3166,8 @@ if st.session_state.prediction_result is not None:
 
         st.info(
             "The predicted exam score does not directly determine "
-            "the Pass / Fail probability because the two outputs "
-            "come from separate trained models."
+            "the Pass / Fail probability because the outputs come "
+            "from two separately trained models."
         )
 
 

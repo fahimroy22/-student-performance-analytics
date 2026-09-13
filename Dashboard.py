@@ -1,6 +1,6 @@
 # ============================================================
 # STUDENT PERFORMANCE ANALYTICS - DASHBOARD
-# Final visual-first version
+# Compact visual-first final version
 # ============================================================
 
 from pathlib import Path
@@ -19,22 +19,25 @@ from sklearn.metrics import (
     mean_squared_error,
     r2_score,
 )
+
 from sklearn.model_selection import train_test_split
 
 from components.footer import show_footer
+
 from components.styles import (
     apply_global_styles,
     get_plotly_template,
     get_theme_colors,
 )
+
 from components.icons import (
     page_title,
     section_title,
     icon_card,
 )
+
 from components.ml_pipeline_story import (
     render_ml_pipeline_story,
-    render_system_status,
 )
 
 from core.model_loader import (
@@ -85,7 +88,7 @@ df = load_data()
 
 
 # ============================================================
-# THEME SETTINGS
+# THEME
 # ============================================================
 
 plotly_template = get_plotly_template()
@@ -98,6 +101,10 @@ chart_muted = theme_colors["muted"]
 chart_border = theme_colors["border"]
 accent = theme_colors["accent"]
 
+positive_color = "#5FA879"
+negative_color = "#C86B6B"
+warning_color = "#C89C55"
+
 
 # ============================================================
 # PAGE CSS
@@ -108,40 +115,161 @@ st.markdown(
     <style>
 
     .block-container {{
-        padding-top: 1.8rem;
+        padding-top: 1.7rem;
         padding-bottom: 2rem;
     }}
 
+    /* --------------------------------------------------------
+       SMALL SUPPORT TEXT
+    -------------------------------------------------------- */
+
     .dashboard-note {{
-        color:{chart_muted};
-        font-size:11px;
-        line-height:1.45;
+        color: {chart_muted};
+        font-size: 0.78rem;
+        line-height: 1.45;
     }}
 
-    .class-summary {{
-        background:{surface};
-        border:1px solid {chart_border};
-        border-radius:12px;
-        padding:14px 15px;
-        min-height:105px;
+
+    /* --------------------------------------------------------
+       NAVIGATION CARDS
+    -------------------------------------------------------- */
+
+    .nav-card {{
+        background: {surface};
+        border: 1px solid {chart_border};
+        border-radius: 14px;
+        padding: 17px 17px 13px 17px;
+        min-height: 116px;
+        margin-bottom: 8px;
     }}
 
-    .class-summary-label {{
-        color:{chart_muted};
-        font-size:11px;
-        margin-bottom:6px;
+    .nav-label {{
+        color: {accent};
+        font-size: 0.66rem;
+        font-weight: 750;
+        letter-spacing: 0.06rem;
+        text-transform: uppercase;
+        margin-bottom: 6px;
     }}
 
-    .class-summary-value {{
-        color:{chart_text};
-        font-size:21px;
-        font-weight:700;
-        margin-bottom:4px;
+    .nav-title {{
+        color: {chart_text};
+        font-size: 1rem;
+        font-weight: 700;
+        margin-bottom: 5px;
     }}
 
-    .class-summary-note {{
-        color:{chart_muted};
-        font-size:11px;
+    .nav-description {{
+        color: {chart_muted};
+        font-size: 0.77rem;
+        line-height: 1.45;
+    }}
+
+
+    /* --------------------------------------------------------
+       MODEL PERFORMANCE CARDS
+    -------------------------------------------------------- */
+
+    .model-panel {{
+        background: {surface};
+        border: 1px solid {chart_border};
+        border-radius: 14px;
+        padding: 16px 18px;
+        min-height: 135px;
+    }}
+
+    .model-panel-label {{
+        color: {accent};
+        font-size: 0.68rem;
+        font-weight: 750;
+        letter-spacing: 0.05rem;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+    }}
+
+    .model-panel-title {{
+        color: {chart_text};
+        font-size: 1.02rem;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }}
+
+    .model-panel-text {{
+        color: {chart_muted};
+        font-size: 0.77rem;
+        line-height: 1.45;
+    }}
+
+
+    /* --------------------------------------------------------
+       AUDIT CARDS
+    -------------------------------------------------------- */
+
+    .audit-card {{
+        background: {surface};
+        border: 1px solid {chart_border};
+        border-radius: 14px;
+        padding: 17px 18px;
+        min-height: 135px;
+    }}
+
+    .audit-label {{
+        color: {accent};
+        font-size: 0.67rem;
+        font-weight: 750;
+        letter-spacing: 0.05rem;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+    }}
+
+    .audit-title {{
+        color: {chart_text};
+        font-size: 1rem;
+        font-weight: 700;
+        margin-bottom: 6px;
+    }}
+
+    .audit-text {{
+        color: {chart_muted};
+        font-size: 0.78rem;
+        line-height: 1.5;
+    }}
+
+
+    /* --------------------------------------------------------
+       DATA SUMMARY
+    -------------------------------------------------------- */
+
+    .dataset-health {{
+        background: {surface};
+        border: 1px solid {chart_border};
+        border-radius: 11px;
+        padding: 10px 14px;
+        color: {chart_muted};
+        font-size: 0.76rem;
+        line-height: 1.45;
+        margin-top: 4px;
+        margin-bottom: 10px;
+    }}
+
+    .dataset-health b {{
+        color: {chart_text};
+        font-weight: 650;
+    }}
+
+
+    /* --------------------------------------------------------
+       RESPONSIVE
+    -------------------------------------------------------- */
+
+    @media(max-width: 900px) {{
+
+        .nav-card,
+        .model-panel,
+        .audit-card {{
+            min-height: auto;
+        }}
+
     }}
 
     </style>
@@ -160,6 +288,7 @@ def style_chart(fig):
         template=plotly_template,
         paper_bgcolor=chart_background,
         plot_bgcolor=chart_background,
+
         font=dict(
             color=chart_text
         ),
@@ -291,7 +420,7 @@ def calculate_dashboard_metrics():
 
 
     # --------------------------------------------------------
-    # LOGISTIC REGRESSION
+    # BALANCED LOGISTIC REGRESSION
     # --------------------------------------------------------
 
     y_cls = (
@@ -355,6 +484,7 @@ def calculate_dashboard_metrics():
 
 
     return {
+
         "linear_mae":
             linear_mae,
 
@@ -381,19 +511,7 @@ model_metrics = (
 
 
 # ============================================================
-# HEADER
-# ============================================================
-
-page_title(
-    "dashboard",
-    "Student Performance Analytics",
-    "Explore the complete machine-learning workflow, model performance, "
-    "and interactive student predictions.",
-)
-
-
-# ============================================================
-# DATASET SNAPSHOT
+# DATASET SUMMARY VALUES
 # ============================================================
 
 records = len(
@@ -416,29 +534,78 @@ duplicates = int(
 )
 
 
-col1, col2, col3, col4 = (
+# ============================================================
+# HEADER
+# ============================================================
+
+page_title(
+    "dashboard",
+    "Student Performance Analytics",
+    "Explore the complete machine-learning workflow, understand the "
+    "models, and generate interactive student performance predictions.",
+)
+
+
+# ============================================================
+# PROJECT AT A GLANCE
+# ============================================================
+
+section_title(
+    "sparkles",
+    "Project at a Glance",
+)
+
+
+glance1, glance2, glance3, glance4 = (
     st.columns(4)
 )
 
 
-col1.metric(
+glance1.metric(
     "Student Records",
     f"{records:,}",
 )
 
-col2.metric(
-    "Variables",
-    columns,
+
+glance2.metric(
+    "Model Predictors",
+    "6",
 )
 
-col3.metric(
-    "Missing Values",
-    f"{missing_values:,}",
+
+glance3.metric(
+    "ML Models",
+    "2",
 )
 
-col4.metric(
-    "Duplicates",
-    duplicates,
+
+glance4.metric(
+    "Prediction Outputs",
+    "3",
+)
+
+
+st.html(
+    f"""
+    <div class="dataset-health">
+
+        Dataset health ·
+
+        <b>{columns}</b> variables ·
+
+        <b>{missing_values:,}</b> missing cells ·
+
+        <b>{duplicates:,}</b> duplicate rows
+
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+
+        Outputs:
+        <b>Exam Score</b> ·
+        <b>Pass / Fail</b> ·
+        <b>Pass Probability</b>
+
+    </div>
+    """
 )
 
 
@@ -453,36 +620,20 @@ section_title(
 
 
 st.caption(
-    "Follow the full path from raw student data to an interactive prediction."
+    "Follow the complete path from raw student data to an "
+    "interactive prediction."
 )
 
 
-# Keep this component unchanged.
+# IMPORTANT:
+# Keep the existing pipeline component unchanged.
 render_ml_pipeline_story(
     theme_colors
 )
 
 
 # ============================================================
-# SYSTEM STATUS
-# ============================================================
-
-section_title(
-    "settings",
-    "System Status",
-)
-
-
-render_system_status(
-    theme_colors=theme_colors,
-    records=records,
-    variables=columns,
-    missing_values=missing_values,
-)
-
-
-# ============================================================
-# QUICK NAVIGATION
+# EXPLORE PROJECT
 # ============================================================
 
 section_title(
@@ -491,15 +642,42 @@ section_title(
 )
 
 
-nav1, nav2, nav3 = (
-    st.columns(3)
+nav1, nav2, nav3, nav4 = (
+    st.columns(4)
 )
 
 
+# ------------------------------------------------------------
+# DATA
+# ------------------------------------------------------------
+
 with nav1:
+
+    st.html(
+        """
+        <div class="nav-card">
+
+            <div class="nav-label">
+                Step 1
+            </div>
+
+            <div class="nav-title">
+                Explore Data
+            </div>
+
+            <div class="nav-description">
+                Inspect the dataset, distributions, missing values,
+                variables, and exploratory analysis.
+            </div>
+
+        </div>
+        """
+    )
+
 
     if st.button(
         "Dataset & EDA",
+        key="nav_eda",
         width="stretch",
     ):
 
@@ -508,10 +686,37 @@ with nav1:
         )
 
 
+# ------------------------------------------------------------
+# PREPROCESSING
+# ------------------------------------------------------------
+
 with nav2:
+
+    st.html(
+        """
+        <div class="nav-card">
+
+            <div class="nav-label">
+                Step 2
+            </div>
+
+            <div class="nav-title">
+                Prepare Data
+            </div>
+
+            <div class="nav-description">
+                Explore train/test splitting, median imputation,
+                standardization, and leakage protection.
+            </div>
+
+        </div>
+        """
+    )
+
 
     if st.button(
         "Preprocessing",
+        key="nav_preprocessing",
         width="stretch",
     ):
 
@@ -520,39 +725,37 @@ with nav2:
         )
 
 
+# ------------------------------------------------------------
+# MODELS
+# ------------------------------------------------------------
+
 with nav3:
 
-    if st.button(
-        "Linear Regression",
-        width="stretch",
-    ):
+    st.html(
+        """
+        <div class="nav-card">
 
-        st.switch_page(
-            "pages/03_Linear_Regression.py"
-        )
+            <div class="nav-label">
+                Step 3
+            </div>
 
+            <div class="nav-title">
+                Analyze Models
+            </div>
 
-nav4, nav5, nav6 = (
-    st.columns(3)
-)
+            <div class="nav-description">
+                Study regression, classification, model comparison,
+                and evaluation performance.
+            </div>
 
+        </div>
+        """
+    )
 
-with nav4:
-
-    if st.button(
-        "Logistic Regression",
-        width="stretch",
-    ):
-
-        st.switch_page(
-            "pages/04_Logistic_Regression.py"
-        )
-
-
-with nav5:
 
     if st.button(
         "Model Comparison",
+        key="nav_models",
         width="stretch",
     ):
 
@@ -561,10 +764,37 @@ with nav5:
         )
 
 
-with nav6:
+# ------------------------------------------------------------
+# PREDICTION
+# ------------------------------------------------------------
+
+with nav4:
+
+    st.html(
+        """
+        <div class="nav-card">
+
+            <div class="nav-label">
+                Step 4
+            </div>
+
+            <div class="nav-title">
+                Make a Prediction
+            </div>
+
+            <div class="nav-description">
+                Enter six student variables and generate score,
+                Pass / Fail, and probability predictions.
+            </div>
+
+        </div>
+        """
+    )
+
 
     if st.button(
         "Predict Performance",
+        key="nav_predict",
         type="primary",
         width="stretch",
     ):
@@ -574,43 +804,20 @@ with nav6:
         )
 
 
-threshold_col1, threshold_col2, threshold_col3 = (
-    st.columns(
-        [
-            1,
-            1.5,
-            1,
-        ]
-    )
-)
-
-
-with threshold_col2:
-
-    if st.button(
-        "Explore Classification Threshold",
-        width="stretch",
-    ):
-
-        st.switch_page(
-            "pages/07_Threshold_Explorer.py"
-        )
-
-
 # ============================================================
-# DATASET OVERVIEW
+# DATASET INSIGHTS
 # ============================================================
 
 section_title(
     "database",
-    "Dataset Overview",
+    "Dataset Insights",
 )
 
 
 chart1, chart2 = (
     st.columns(
         [
-            1.5,
+            1.55,
             1,
         ]
     )
@@ -623,223 +830,236 @@ chart1, chart2 = (
 
 with chart1:
 
-    if (
-        "exam_score"
-        in df.columns
-    ):
-
-        st.markdown(
-            "#### Exam Score Distribution"
-        )
+    st.markdown(
+        "#### Exam Score Distribution"
+    )
 
 
-        fig_score = px.histogram(
-            df,
-            x="exam_score",
-            nbins=25,
-        )
+    fig_score = px.histogram(
+        df,
+        x="exam_score",
+        nbins=25,
+    )
 
 
-        fig_score.update_traces(
-            marker_color=accent
-        )
+    fig_score.update_traces(
+        marker_color=accent
+    )
 
 
-        fig_score.update_layout(
-            height=320,
+    fig_score.update_layout(
+        height=315,
 
-            margin=dict(
-                l=20,
-                r=20,
-                t=10,
-                b=20,
-            ),
+        margin=dict(
+            l=20,
+            r=20,
+            t=10,
+            b=20,
+        ),
 
-            xaxis_title=(
-                "Exam Score"
-            ),
+        xaxis_title=(
+            "Exam Score"
+        ),
 
-            yaxis_title=(
-                "Students"
-            ),
+        yaxis_title=(
+            "Students"
+        ),
 
-            showlegend=False,
-        )
-
-
-        style_chart(
-            fig_score
-        )
+        showlegend=False,
+    )
 
 
-        st.plotly_chart(
-            fig_score,
-            width="stretch",
-            theme=None,
-            config={
-                "displayModeBar":
-                    False
-            },
-        )
+    style_chart(
+        fig_score
+    )
+
+
+    st.plotly_chart(
+        fig_score,
+        width="stretch",
+        theme=None,
+
+        config={
+            "displayModeBar":
+                False
+        },
+    )
 
 
 # ------------------------------------------------------------
-# PASS / FAIL DISTRIBUTION
+# PASS / FAIL
 # ------------------------------------------------------------
 
 with chart2:
 
-    if (
-        "pass_status"
-        in df.columns
-    ):
+    st.markdown(
+        "#### Pass / Fail Distribution"
+    )
 
-        st.markdown(
-            "#### Pass / Fail Distribution"
+
+    class_counts = (
+        df[
+            "pass_status"
+        ]
+        .value_counts()
+    )
+
+
+    pass_count = int(
+        class_counts.get(
+            "Pass",
+            0,
         )
+    )
 
 
-        class_counts = (
-            df[
-                "pass_status"
-            ]
-            .value_counts()
+    fail_count = int(
+        class_counts.get(
+            "Fail",
+            0,
         )
+    )
 
 
-        pass_count = int(
-            class_counts.get(
+    class_df = pd.DataFrame(
+        {
+            "Status": [
                 "Pass",
-                0,
-            )
-        )
-
-
-        fail_count = int(
-            class_counts.get(
                 "Fail",
-                0,
-            )
-        )
+            ],
+
+            "Students": [
+                pass_count,
+                fail_count,
+            ],
+        }
+    )
 
 
-        class_df = pd.DataFrame(
-            {
-                "Status": [
-                    "Pass",
-                    "Fail",
+    fig_class = go.Figure(
+        data=[
+            go.Pie(
+                labels=class_df[
+                    "Status"
                 ],
 
-                "Students": [
-                    pass_count,
-                    fail_count,
+                values=class_df[
+                    "Students"
                 ],
-            }
-        )
 
+                hole=0.66,
 
-        fig_class = px.pie(
-            class_df,
-            names="Status",
-            values="Students",
-            hole=0.62,
-        )
+                marker=dict(
+                    colors=[
+                        positive_color,
+                        negative_color,
+                    ],
 
+                    line=dict(
+                        color=chart_background,
+                        width=2,
+                    ),
+                ),
 
-        fig_class.update_traces(
-            textposition="inside",
-            textinfo="percent+label",
-        )
+                textinfo=(
+                    "label+percent"
+                ),
 
+                textposition=(
+                    "inside"
+                ),
 
-        fig_class.update_layout(
-            template=plotly_template,
-
-            height=245,
-
-            margin=dict(
-                l=10,
-                r=10,
-                t=5,
-                b=5,
-            ),
-
-            showlegend=False,
-
-            paper_bgcolor=(
-                chart_background
-            ),
-
-            plot_bgcolor=(
-                chart_background
-            ),
-
-            font=dict(
-                color=chart_text
-            ),
-        )
-
-
-        st.plotly_chart(
-            fig_class,
-            width="stretch",
-            theme=None,
-            config={
-                "displayModeBar":
-                    False
-            },
-        )
-
-
-        pass_col, fail_col = (
-            st.columns(2)
-        )
-
-
-        with pass_col:
-
-            st.html(
-                f"""
-                <div class="class-summary">
-
-                    <div class="class-summary-label">
-                        PASS
-                    </div>
-
-                    <div class="class-summary-value">
-                        {pass_count:,}
-                    </div>
-
-                    <div class="class-summary-note">
-                        {pass_count / len(df) * 100:.1f}% of students
-                    </div>
-
-                </div>
-                """
+                hovertemplate=(
+                    "%{label}"
+                    "<br>"
+                    "%{value:,} students"
+                    "<br>"
+                    "%{percent}"
+                    "<extra></extra>"
+                ),
             )
+        ]
+    )
 
 
-        with fail_col:
+    fig_class.add_annotation(
+        x=0.5,
+        y=0.56,
 
-            st.html(
-                f"""
-                <div class="class-summary">
+        text=(
+            f"<b>{records:,}</b>"
+        ),
 
-                    <div class="class-summary-label">
-                        FAIL
-                    </div>
+        showarrow=False,
 
-                    <div class="class-summary-value">
-                        {fail_count:,}
-                    </div>
+        font=dict(
+            size=19,
+            color=chart_text,
+        ),
+    )
 
-                    <div class="class-summary-note">
-                        {fail_count / len(df) * 100:.1f}% of students
-                    </div>
 
-                </div>
-                """
-            )
+    fig_class.add_annotation(
+        x=0.5,
+        y=0.43,
+
+        text=(
+            "Students"
+        ),
+
+        showarrow=False,
+
+        font=dict(
+            size=10,
+            color=chart_muted,
+        ),
+    )
+
+
+    fig_class.update_layout(
+        template=plotly_template,
+
+        height=315,
+
+        margin=dict(
+            l=5,
+            r=5,
+            t=5,
+            b=5,
+        ),
+
+        showlegend=False,
+
+        paper_bgcolor=(
+            chart_background
+        ),
+
+        plot_bgcolor=(
+            chart_background
+        ),
+
+        font=dict(
+            color=chart_text
+        ),
+    )
+
+
+    st.plotly_chart(
+        fig_class,
+        width="stretch",
+        theme=None,
+
+        config={
+            "displayModeBar":
+                False
+        },
+    )
+
+
+    st.caption(
+        f"Pass: {pass_count:,} ({pass_count / records * 100:.1f}%) · "
+        f"Fail: {fail_count:,} ({fail_count / records * 100:.1f}%)"
+    )
 
 
 # ============================================================
@@ -856,17 +1076,10 @@ selected_features = [
 ]
 
 
-available_features = [
-    feature
-    for feature
-    in selected_features
-    if feature in df.columns
-]
-
-
 feature_labels = {
+
     "previous_exam_score":
-        "Previous Exam Score",
+        "Previous Exam",
 
     "previous_gpa":
         "Previous GPA",
@@ -875,7 +1088,7 @@ feature_labels = {
         "Attendance",
 
     "assignment_completion_rate":
-        "Assignment Completion",
+        "Assignments",
 
     "study_hours_per_day":
         "Study Hours",
@@ -885,11 +1098,30 @@ feature_labels = {
 }
 
 
+available_features = [
+    feature
+    for feature
+    in selected_features
+    if feature in df.columns
+]
+
+
 if (
-    "exam_score"
-    in df.columns
+    "exam_score" in df.columns
     and available_features
 ):
+
+    section_title(
+        "chart",
+        "Which Inputs Relate Most to Exam Score?",
+    )
+
+
+    st.caption(
+        "Pearson correlation between each of the six selected predictors "
+        "and the final exam score."
+    )
+
 
     correlation_data = (
         df[
@@ -929,48 +1161,18 @@ if (
     )
 
 
-    correlation_data[
-        "Direction"
-    ] = np.where(
-        correlation_data[
-            "Correlation"
-        ] >= 0,
-        "Positive",
-        "Negative",
-    )
-
-
-    section_title(
-        "chart",
-        "Selected Features vs. Exam Score",
-    )
-
-
-    st.caption(
-        "Pearson correlation between each selected predictor "
-        "and the final exam score."
-    )
-
-
-    positive_color = (
-        "#5FA879"
-    )
-
-    negative_color = (
-        "#C86B6B"
-    )
-
-
     correlation_colors = [
         (
             positive_color
             if value >= 0
             else negative_color
         )
-        for value
-        in correlation_data[
-            "Correlation"
-        ]
+
+        for value in (
+            correlation_data[
+                "Correlation"
+            ]
+        )
     ]
 
 
@@ -1023,17 +1225,17 @@ if (
 
 
     fig_corr.update_layout(
-        height=320,
+        height=315,
 
         margin=dict(
             l=20,
-            r=60,
+            r=65,
             t=10,
             b=20,
         ),
 
         xaxis_title=(
-            "Correlation"
+            "Correlation with Exam Score"
         ),
 
         yaxis_title="",
@@ -1051,6 +1253,7 @@ if (
         fig_corr,
         width="stretch",
         theme=None,
+
         config={
             "displayModeBar":
                 False
@@ -1059,8 +1262,8 @@ if (
 
 
     st.caption(
-        "Green indicates a positive relationship with exam score; "
-        "red indicates a negative relationship. Correlation does not imply causation."
+        "Positive values indicate that higher feature values tend to "
+        "occur with higher exam scores. Correlation does not imply causation."
     )
 
 
@@ -1074,236 +1277,398 @@ section_title(
 )
 
 
-model1, model2 = (
+model_left, model_right = (
+    st.columns(2)
+)
+
+
+# ============================================================
+# LINEAR REGRESSION PANEL
+# ============================================================
+
+with model_left:
+
+    st.html(
+        f"""
+        <div class="model-panel">
+
+            <div class="model-panel-label">
+                Regression Model
+            </div>
+
+            <div class="model-panel-title">
+                Linear Regression
+            </div>
+
+            <div class="model-panel-text">
+                Predicts a continuous exam score from the six
+                pre-exam student variables.
+            </div>
+
+        </div>
+        """
+    )
+
+
+    lr1, lr2, lr3 = (
+        st.columns(3)
+    )
+
+
+    lr1.metric(
+        "MAE",
+        f"{model_metrics['linear_mae']:.2f}",
+    )
+
+
+    lr2.metric(
+        "RMSE",
+        f"{model_metrics['linear_rmse']:.2f}",
+    )
+
+
+    lr3.metric(
+        "R²",
+        f"{model_metrics['linear_r2']:.3f}",
+    )
+
+
+    r2_percent = (
+        max(
+            0,
+            model_metrics[
+                "linear_r2"
+            ]
+        )
+        * 100
+    )
+
+
+    fig_r2 = go.Figure(
+        go.Indicator(
+            mode="gauge+number",
+
+            value=r2_percent,
+
+            number={
+                "suffix":
+                    "%",
+
+                "font": {
+                    "size":
+                        28
+                },
+            },
+
+            title={
+                "text":
+                    "Variance Explained"
+            },
+
+            gauge={
+                "axis": {
+                    "range": [
+                        0,
+                        100,
+                    ]
+                },
+
+                "bar": {
+                    "color":
+                        accent,
+
+                    "thickness":
+                        0.24,
+                },
+
+                "bgcolor":
+                    surface,
+
+                "bordercolor":
+                    chart_border,
+            },
+        )
+    )
+
+
+    fig_r2.update_layout(
+        height=205,
+
+        margin=dict(
+            l=25,
+            r=25,
+            t=35,
+            b=5,
+        ),
+
+        paper_bgcolor=(
+            chart_background
+        ),
+
+        font=dict(
+            color=chart_text
+        ),
+    )
+
+
+    st.plotly_chart(
+        fig_r2,
+        width="stretch",
+        theme=None,
+
+        config={
+            "displayModeBar":
+                False
+        },
+    )
+
+
+# ============================================================
+# LOGISTIC REGRESSION PANEL
+# ============================================================
+
+with model_right:
+
+    st.html(
+        f"""
+        <div class="model-panel">
+
+            <div class="model-panel-label">
+                Classification Model
+            </div>
+
+            <div class="model-panel-title">
+                Balanced Logistic Regression
+            </div>
+
+            <div class="model-panel-text">
+                Predicts Pass / Fail and estimates the probability
+                of passing while accounting for class imbalance.
+            </div>
+
+        </div>
+        """
+    )
+
+
+    cls1, cls2, cls3 = (
+        st.columns(3)
+    )
+
+
+    cls1.metric(
+        "Accuracy",
+        (
+            f"{model_metrics['logistic_accuracy'] * 100:.1f}%"
+        ),
+    )
+
+
+    cls2.metric(
+        "Balanced Acc.",
+        (
+            f"{model_metrics['logistic_balanced_accuracy'] * 100:.1f}%"
+        ),
+    )
+
+
+    cls3.metric(
+        "F1",
+        (
+            f"{model_metrics['logistic_f1'] * 100:.1f}%"
+        ),
+    )
+
+
+    balanced_accuracy_percent = (
+        model_metrics[
+            "logistic_balanced_accuracy"
+        ]
+        * 100
+    )
+
+
+    fig_ba = go.Figure(
+        go.Indicator(
+            mode="gauge+number",
+
+            value=(
+                balanced_accuracy_percent
+            ),
+
+            number={
+                "suffix":
+                    "%",
+
+                "font": {
+                    "size":
+                        28
+                },
+            },
+
+            title={
+                "text":
+                    "Balanced Accuracy"
+            },
+
+            gauge={
+                "axis": {
+                    "range": [
+                        0,
+                        100,
+                    ]
+                },
+
+                "bar": {
+                    "color":
+                        positive_color,
+
+                    "thickness":
+                        0.24,
+                },
+
+                "bgcolor":
+                    surface,
+
+                "bordercolor":
+                    chart_border,
+            },
+        )
+    )
+
+
+    fig_ba.update_layout(
+        height=205,
+
+        margin=dict(
+            l=25,
+            r=25,
+            t=35,
+            b=5,
+        ),
+
+        paper_bgcolor=(
+            chart_background
+        ),
+
+        font=dict(
+            color=chart_text
+        ),
+    )
+
+
+    st.plotly_chart(
+        fig_ba,
+        width="stretch",
+        theme=None,
+
+        config={
+            "displayModeBar":
+                False
+        },
+    )
+
+
+st.caption(
+    "Performance values are calculated directly from the saved models "
+    "using the same held-out evaluation splits used throughout the app."
+)
+
+
+# ============================================================
+# MODEL AUDIT & ADVANCED TOOLS
+# ============================================================
+
+section_title(
+    "scale",
+    "Model Audit & Advanced Tools",
+)
+
+
+audit1, audit2 = (
     st.columns(2)
 )
 
 
 # ------------------------------------------------------------
-# LINEAR REGRESSION
+# FAIRNESS / SUBGROUP AUDIT
 # ------------------------------------------------------------
 
-with model1:
-
-    with st.container(
-        border=True
-    ):
-
-        icon_card(
-            "trending",
-            "Linear Regression",
-            "Predicts the student's numerical exam score.",
-        )
-
-
-        metric1, metric2, metric3 = (
-            st.columns(3)
-        )
-
-
-        metric1.metric(
-            "MAE",
-            (
-                f"{model_metrics['linear_mae']:.2f}"
-            ),
-        )
-
-
-        metric2.metric(
-            "RMSE",
-            (
-                f"{model_metrics['linear_rmse']:.2f}"
-            ),
-        )
-
-
-        metric3.metric(
-            "R²",
-            (
-                f"{model_metrics['linear_r2']:.3f}"
-            ),
-        )
-
-
-# ------------------------------------------------------------
-# LOGISTIC REGRESSION
-# ------------------------------------------------------------
-
-with model2:
-
-    with st.container(
-        border=True
-    ):
-
-        icon_card(
-            "target",
-            "Balanced Logistic Regression",
-            "Predicts Pass / Fail and pass probability.",
-        )
-
-
-        metric1, metric2, metric3 = (
-            st.columns(3)
-        )
-
-
-        metric1.metric(
-            "Accuracy",
-            (
-                f"{model_metrics['logistic_accuracy'] * 100:.1f}%"
-            ),
-        )
-
-
-        metric2.metric(
-            "Balanced Acc.",
-            (
-                f"{model_metrics['logistic_balanced_accuracy'] * 100:.1f}%"
-            ),
-        )
-
-
-        metric3.metric(
-            "F1",
-            (
-                f"{model_metrics['logistic_f1'] * 100:.1f}%"
-            ),
-        )
-
-
-st.caption(
-    "Dashboard metrics are calculated directly from the saved models "
-    "using the same held-out evaluation splits used throughout the application."
-)
-
-
-# ============================================================
-# HOW PREDICTION WORKS
-# ============================================================
-
-section_title(
-    "sparkles",
-    "How Prediction Works",
-)
-
-
-flow1, arrow1, flow2, arrow2, flow3 = (
-    st.columns(
-        [
-            2.2,
-            0.4,
-            2.2,
-            0.4,
-            2.2,
-        ]
-    )
-)
-
-
-with flow1:
-
-    icon_card(
-        "sliders",
-        "6 Student Inputs",
-        "Previous performance, GPA, attendance, assignments, "
-        "study hours, and practice tests.",
-    )
-
-
-with arrow1:
+with audit1:
 
     st.html(
-        f"""
-        <div style="
-            text-align:center;
-            font-size:30px;
-            padding-top:42px;
-            color:{chart_muted};
-        ">
-            →
+        """
+        <div class="audit-card">
+
+            <div class="audit-label">
+                Model Audit
+            </div>
+
+            <div class="audit-title">
+                Fairness & Subgroup Analysis
+            </div>
+
+            <div class="audit-text">
+                Compare regression error, Balanced Accuracy,
+                Pass Recall, Fail Recall, and subgroup size across
+                gender, education level, school type, family income,
+                and urban/rural groups.
+            </div>
+
         </div>
         """
     )
 
 
-with flow2:
+    if st.button(
+        "Open Fairness Analysis",
+        key="open_fairness",
+        width="stretch",
+    ):
 
-    icon_card(
-        "brain",
-        "Trained Models",
-        "Linear Regression and Balanced Logistic Regression.",
-    )
+        st.switch_page(
+            "pages/05_Model_Comparison.py"
+        )
 
 
-with arrow2:
+# ------------------------------------------------------------
+# THRESHOLD EXPLORER
+# ------------------------------------------------------------
+
+with audit2:
 
     st.html(
-        f"""
-        <div style="
-            text-align:center;
-            font-size:30px;
-            padding-top:42px;
-            color:{chart_muted};
-        ">
-            →
+        """
+        <div class="audit-card">
+
+            <div class="audit-label">
+                Interactive Evaluation
+            </div>
+
+            <div class="audit-title">
+                Classification Threshold Explorer
+            </div>
+
+            <div class="audit-text">
+                Move the decision threshold and observe how
+                Balanced Accuracy, precision, recall, false positives,
+                and false negatives change on the held-out test set.
+            </div>
+
         </div>
         """
     )
 
 
-with flow3:
+    if st.button(
+        "Explore Classification Threshold",
+        key="open_threshold",
+        width="stretch",
+    ):
 
-    icon_card(
-        "graduation",
-        "Prediction",
-        "Exam Score, Pass / Fail status, and Pass Probability.",
-    )
-
-
-# ============================================================
-# INTERACTIVE ML LEARNING
-# ============================================================
-
-section_title(
-    "sparkles",
-    "Interactive ML Learning",
-)
-
-
-learn1, learn2, learn3 = (
-    st.columns(3)
-)
-
-
-with learn1:
-
-    icon_card(
-        "scale",
-        "Threshold Explorer",
-        "Adjust the classification threshold and observe "
-        "changes in precision, recall, false positives, "
-        "and false negatives.",
-    )
-
-
-with learn2:
-
-    icon_card(
-        "chart",
-        "Model Transparency",
-        "Explore class imbalance, evaluation metrics, "
-        "feature influence, and prediction uncertainty.",
-    )
-
-
-with learn3:
-
-    icon_card(
-        "sliders",
-        "Scenario Simulation",
-        "Compare alternative student profiles using model estimates "
-        "without presenting the changes as causal guarantees.",
-    )
+        st.switch_page(
+            "pages/07_Threshold_Explorer.py"
+        )
 
 
 # ============================================================
@@ -1316,7 +1681,7 @@ section_title(
 )
 
 
-cta1, cta2, cta3 = (
+cta_left, cta_center, cta_right = (
     st.columns(
         [
             1,
@@ -1327,10 +1692,18 @@ cta1, cta2, cta3 = (
 )
 
 
-with cta2:
+with cta_center:
+
+    st.caption(
+        "Enter your own student profile to generate an exam-score "
+        "estimate, Pass / Fail classification, pass probability, "
+        "feature-level prediction explanation, and improvement scenario."
+    )
+
 
     if st.button(
         "Try Student Performance Prediction",
+        key="final_prediction_cta",
         type="primary",
         width="stretch",
     ):
