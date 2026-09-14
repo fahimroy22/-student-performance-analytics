@@ -8,6 +8,8 @@ The project was developed for a machine-learning assignment. It combines dataset
 
 > **Documentation scope:** This README reflects the implementation, results, and deployment progress recorded in the project conversation. Metrics are reported results, not a new evaluation. The source repository and deployed application were not independently audited for this document. Unspecified details are identified rather than supplied as assumptions.
 
+🚀 **[Try the live app](https://fahim-student-result-prediction.streamlit.app/)**
+
 ## Contents
 
 - [Overview](#overview)
@@ -376,7 +378,7 @@ Check that text streams, the thinking indicator clears, the bot icon appears in 
 
 ## Deployment
 
-The recorded deployment uses GitHub and Streamlit Community Cloud, with updates pushed to `main`. The final conversation reports the deployed Gemini integration working. A confirmed public app URL is not supplied in this README.
+The recorded deployment uses GitHub and Streamlit Community Cloud, with updates pushed to `main`. The final conversation reports the deployed Gemini integration working. **Live app:** [Student Performance Analytics](https://fahim-student-result-prediction.streamlit.app/)
 
 ### Deployment configuration
 
