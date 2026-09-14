@@ -298,6 +298,33 @@ This is a partial inventory of paths explicitly referenced in the conversation, 
 | `requirements.txt` | Python dependencies |
 | `.streamlit/secrets.toml` | Local secrets; must remain outside version control |
 | `.gitignore` | Exclusions for local files and secrets |
+| `retrain_models.py` | Trains and evaluates both model pipelines, then saves them to `models/` using joblib |
+| joblib | Saves the trained preprocessing and model pipelines as `.pkl` files |
+
+### Retraining the models
+
+From the project root, with the project environment activated, run:
+
+python retrain_models.py
+
+The script:
+1. Loads `data/student_performance.csv`.
+2. Selects the six documented predictors.
+3. Creates 80/20 train/test splits with `random_state=42`,
+   using stratification for classification.
+4. Fits median imputation and StandardScaler within each pipeline.
+5. Trains Linear Regression and Balanced Logistic Regression.
+6. Prints regression and classification evaluation metrics.
+7. Saves both fitted pipelines using joblib.
+
+Balanced Logistic Regression uses `class_weight="balanced"`,
+`max_iter=1000`, and `random_state=42`.
+
+Running the script overwrites:
+- `models/linear_pipeline.pkl`
+- `models/logistic_pipeline.pkl`
+
+The `models/` directory must exist before running the script.
 
 ## Installation and local setup
 
