@@ -1,5 +1,10 @@
 # Student Performance Analytics
 
+![Python](https://img.shields.io/badge/python-3.x-blue)
+![Streamlit](https://img.shields.io/badge/streamlit-app-red)
+![scikit--learn](https://img.shields.io/badge/scikit--learn-ML-orange)
+![License](https://img.shields.io/badge/license-unspecified-lightgrey)
+
 An educational Streamlit application for exploring student data, predicting exam scores and Pass/Fail outcomes, and learning the machine-learning workflow through interactive pages and a Gemini-powered project assistant.
 
 The project was developed for a machine-learning assignment. It combines dataset exploration, preprocessing, two separate prediction tasks, classifier comparison, scenario exploration, and beginner-friendly explanations in one application.
@@ -12,20 +17,22 @@ The project was developed for a machine-learning assignment. It combines dataset
 
 ## App preview
 
-### Dashboard
-![Student performance dashboard](assets/screenshots/dashboard.png)
+<table>
+<tr>
+<td align="center" width="33%"><img src="assets/screenshots/dashboard.png" width="280"/><br/><sub><strong>Dashboard</strong></sub></td>
+<td align="center" width="33%"><img src="assets/screenshots/prediction.png" width="280"/><br/><sub><strong>Predict Performance</strong></sub></td>
+<td align="center" width="33%"><img src="assets/screenshots/learning.png" width="280"/><br/><sub><strong>Learn ML Pipeline</strong></sub></td>
+</tr>
+</table>
 
-### Predict Performance
-![Student performance prediction example](assets/screenshots/prediction.png)
-
-### Learn ML Pipeline
-![Interactive machine-learning tutorial](assets/screenshots/learning.png)
+---
 
 ## Contents
 
 - [Overview](#overview)
 - [Project pages](#project-pages)
 - [Dataset summary](#dataset-summary)
+- [Dataset provenance](#dataset-provenance)
 - [Machine-learning workflow](#machine-learning-workflow)
 - [Models and reported metrics](#models-and-reported-metrics)
 - [Prediction and threshold exploration](#prediction-and-threshold-exploration)
@@ -38,6 +45,8 @@ The project was developed for a machine-learning assignment. It combines dataset
 - [Security and privacy](#security-and-privacy)
 - [Troubleshooting](#troubleshooting)
 - [Limitations and reproducibility](#limitations-and-reproducibility)
+
+---
 
 ## Overview
 
@@ -61,6 +70,10 @@ The application also provides:
 - A project-aware Gemini assistant with streamed answers and chat history.
 - Shared light/dark appearance, themed charts, and reusable visual components.
 
+[⬆ Back to top](#contents)
+
+---
+
 ## Project pages
 
 The following routes are documented in the assistant's page guide. They are **application routes**, not GitHub file links. Open them beneath the running app's address; for example, append `/Preprocessing` to the local or deployed app URL.
@@ -80,6 +93,10 @@ The following routes are documented in the assistant's page guide. They are **ap
 
 A useful learning sequence is Dashboard → Dataset & EDA → Preprocessing → the two model pages → Model Comparison → Predict Performance. Use Learn ML Pipeline for a guided explanation and AI Project Assistant for follow-up questions.
 
+[⬆ Back to top](#contents)
+
+---
+
 ## Dataset summary
 
 The documented CSV location is `data/student_performance.csv`.
@@ -92,7 +109,7 @@ The documented CSV location is `data/student_performance.csv`.
 | Duplicate rows | 0 |
 | Pass records | 77,389 |
 | Fail records | 22,611 |
-| Pass share, rounded | 77.4% |
+| Pass share, rounded | **77.4%** |
 | Fail share, rounded | 22.6% |
 | Selected predictors | 6 |
 
@@ -100,12 +117,12 @@ The missing-value total counts missing entries; it should not be read as the num
 
 ```mermaid
 pie showData
-    title Reported Pass and Fail distribution
-    "Pass" : 77389
-    "Fail" : 22611
+    title Reported Pass/Fail share (%)
+    "Pass (77.4%)" : 77.4
+    "Fail (22.6%)" : 22.6
 ```
 
-*Figure 1. Class counts explain why overall accuracy alone is insufficient for comparing classifiers.*
+*Figure 1. Class share explains why overall accuracy alone is insufficient for comparing classifiers.*
 
 ### Selected predictors
 
@@ -119,6 +136,16 @@ pie showData
 | `practice_tests_completed` | Practice tests completed |
 
 The targets are `exam_score` and `pass_status`. A complete dictionary of all 44 variables, the original dataset publisher, collection methodology, dataset license, and permitted input ranges are not established in the context used for this README.
+
+### Dataset provenance
+
+The original download source, creator, and license could not be
+confirmed. The CSV is retained in the project for reproducibility;
+its inclusion does not establish permission for redistribution or reuse.
+
+[⬆ Back to top](#contents)
+
+---
 
 ## Machine-learning workflow
 
@@ -158,6 +185,10 @@ flowchart TD
 
 *Figure 2. The two prediction tasks use separate targets and pipelines. Both splits use an 80/20 ratio and random state 42.*
 
+[⬆ Back to top](#contents)
+
+---
+
 ## Models and reported metrics
 
 ### Linear Regression
@@ -168,7 +199,7 @@ Linear Regression estimates `exam_score` from the selected predictors.
 |---|---:|---|
 | MAE | 9.38 | Mean absolute prediction error in exam-score units |
 | RMSE | 11.76 | Error measure that gives greater weight to large errors |
-| R² | 0.444 | Approximately 44.4% of the evaluated target variation is explained relative to the mean-prediction reference |
+| R² | **0.444** | Approximately 44.4% of the evaluated target variation is explained relative to the mean-prediction reference |
 
 R² is not a classification accuracy. MAE and RMSE describe error across evaluated records; they are not guaranteed error bounds for an individual student.
 
@@ -184,7 +215,7 @@ The preferred classifier in the documented project is Logistic Regression with `
 | Precision | 90.6% |
 | Recall | 71.9% |
 | F1 | 80.1% |
-| Balanced accuracy | 73.2% |
+| Balanced accuracy | **73.2%** |
 | ROC AUC | 0.814 |
 
 Accuracy measures the overall fraction of correct predictions. Balanced accuracy averages recall across classes, giving each class equal importance. Precision, recall, and F1 describe classification performance under their evaluation label and averaging settings. AUC summarizes discrimination across thresholds; it does not establish probability calibration.
@@ -196,12 +227,16 @@ The metric summary does not explicitly identify the positive-label and averaging
 | Classifier | Accuracy | Balanced accuracy |
 |---|---:|---:|
 | Dummy classifier | 77.4% | 50.0% |
-| Standard Logistic Regression | 80.9% | 64.8% |
-| Balanced Logistic Regression | 72.5% | 73.2% |
+| Standard Logistic Regression | **80.9%** ↑ highest accuracy | 64.8% |
+| Balanced Logistic Regression | 72.5% | **73.2%** ↑ highest balanced accuracy |
 
 Standard Logistic Regression has the highest reported overall accuracy. Balanced Logistic Regression has the highest reported balanced accuracy, which supports its selection when performance across both classes matters.
 
 The Dummy result illustrates the imbalance problem: high majority-class prevalence can produce an apparently strong accuracy while balanced accuracy remains only 50.0%. These results do not establish that the balanced model is best for every decision objective.
+
+[⬆ Back to top](#contents)
+
+---
 
 ## Prediction and threshold exploration
 
@@ -212,6 +247,10 @@ The regression and classification outputs should be interpreted separately. A sc
 **Threshold Explorer** demonstrates how changing a classification threshold changes decisions. It helps explain the tradeoff between identifying more cases and increasing incorrect alerts. The exact threshold range, default value, and operating-policy recommendation are not specified here.
 
 Scenario changes show how the fitted model responds to different inputs. They do not prove that making a particular real-world change will cause the predicted improvement.
+
+[⬆ Back to top](#contents)
+
+---
 
 ## System architecture
 
@@ -240,7 +279,7 @@ The assistant is grounded through project context embedded in its prompt, includ
 
 The final assistant iteration includes streamed responses, right-aligned user messages, left-aligned answers, a custom bot SVG rendered as an encoded image, a three-dot thinking indicator, theme-aware code blocks, code copy buttons, starter questions, and a **New chat** button. Chat history is stored in Streamlit session state.
 
-Relevant answers are instructed to append **“Where this is used in the project”** with clickable internal page links. The final deployment discussion confirmed visible streaming and bot rendering but left consistent appearance of that reference section unverified.
+Relevant answers are instructed to append **"Where this is used in the project"** with clickable internal page links. The final deployment discussion confirmed visible streaming and bot rendering but left consistent appearance of that reference section unverified.
 
 ```mermaid
 sequenceDiagram
@@ -261,6 +300,10 @@ sequenceDiagram
 
 *Figure 4. Assistant request and response flow. Generated text still requires verification.*
 
+[⬆ Back to top](#contents)
+
+---
+
 ## Technology stack
 
 | Technology | Documented role |
@@ -277,6 +320,10 @@ sequenceDiagram
 | Streamlit Community Cloud | Hosted application deployment |
 
 Exact dependency pins and a formally supported Python version are not established by this README. Use the repository's dependency configuration as the installation source of truth.
+
+[⬆ Back to top](#contents)
+
+---
 
 ## Documented project files
 
@@ -301,30 +348,37 @@ This is a partial inventory of paths explicitly referenced in the conversation, 
 | `retrain_models.py` | Trains and evaluates both model pipelines, then saves them to `models/` using joblib |
 | joblib | Saves the trained preprocessing and model pipelines as `.pkl` files |
 
-### Retraining the models
+<details>
+<summary><strong>Retraining the models</strong> — click to expand</summary>
 
 From the project root, with the project environment activated, run:
 
+```bash
 python retrain_models.py
+```
 
 The script:
 1. Loads `data/student_performance.csv`.
 2. Selects the six documented predictors.
-3. Creates 80/20 train/test splits with `random_state=42`,
-   using stratification for classification.
+3. Creates 80/20 train/test splits with `random_state=42`, using stratification for classification.
 4. Fits median imputation and StandardScaler within each pipeline.
 5. Trains Linear Regression and Balanced Logistic Regression.
 6. Prints regression and classification evaluation metrics.
 7. Saves both fitted pipelines using joblib.
 
-Balanced Logistic Regression uses `class_weight="balanced"`,
-`max_iter=1000`, and `random_state=42`.
+Balanced Logistic Regression uses `class_weight="balanced"`, `max_iter=1000`, and `random_state=42`.
 
 Running the script overwrites:
 - `models/linear_pipeline.pkl`
 - `models/logistic_pipeline.pkl`
 
 The `models/` directory must exist before running the script.
+
+</details>
+
+[⬆ Back to top](#contents)
+
+---
 
 ## Installation and local setup
 
@@ -363,7 +417,14 @@ streamlit run Dashboard.py
 
 Open the local URL printed by Streamlit, typically `http://localhost:8501`. For later sessions, activate `.venv` and run the same launch command from the project root.
 
+[⬆ Back to top](#contents)
+
+---
+
 ## Gemini AI assistant setup
+
+<details>
+<summary><strong>Full setup walkthrough</strong> — click to expand</summary>
 
 ### SDK dependency
 
@@ -407,12 +468,18 @@ The project chose Gemini while seeking a free-tier option. No permanent free-usa
 
 Try the documented starter questions:
 
-- “Explain what R² = 0.444 means in this project.”
-- “Why is balanced accuracy important for this project?”
-- “Explain the difference between Linear Regression and Logistic Regression in this project.”
-- “Why does this project use a scikit-learn Pipeline?”
+- "Explain what R² = 0.444 means in this project."
+- "Why is balanced accuracy important for this project?"
+- "Explain the difference between Linear Regression and Logistic Regression in this project."
+- "Why does this project use a scikit-learn Pipeline?"
 
 Check that text streams, the thinking indicator clears, the bot icon appears in both themes, code blocks retain their copy buttons, and relevant page references navigate within the app. **New chat** resets the chat list in the current Streamlit session.
+
+</details>
+
+[⬆ Back to top](#contents)
+
+---
 
 ## Deployment
 
@@ -438,6 +505,10 @@ Local `.streamlit/secrets.toml` is not deployed through GitHub. Cloud secrets mu
 
 For updates, review the working tree, commit the intended files, synchronize with `origin/main`, and push. The recorded workflow used `git pull --rebase origin main` followed by `git push origin main`; Streamlit Cloud then picked up the repository changes. Resolve any conflicts before pushing.
 
+[⬆ Back to top](#contents)
+
+---
+
 ## Security and privacy
 
 - **Protect API keys.** Keep keys out of Python source, README examples, screenshots, and Git commits. Use Streamlit secrets locally and in the cloud.
@@ -449,12 +520,19 @@ For updates, review the working tree, commit the intended files, synchronize wit
 
 Authentication, role-based access, a formal data-retention policy, and a security audit are not established in the documented context. Dataset redistribution permissions also remain unspecified.
 
+[⬆ Back to top](#contents)
+
+---
+
 ## Troubleshooting
+
+<details>
+<summary><strong>Show troubleshooting table</strong> — click to expand</summary>
 
 | Symptom | Documented cause or useful check | Action |
 |---|---|---|
 | `ImportError: cannot import name 'genai' from 'google'` | Required Gemini SDK missing from deployment dependencies | Add `google-genai` to `requirements.txt`, install dependencies, and redeploy |
-| “Gemini is not configured” | Client setup cannot read or use the secret | Check the exact `GEMINI_API_KEY` name and local/cloud TOML configuration |
+| "Gemini is not configured" | Client setup cannot read or use the secret | Check the exact `GEMINI_API_KEY` name and local/cloud TOML configuration |
 | Authentication or permission error | API key or account access issue | Check the configured key and its permissions without publishing it |
 | Quota / 429 error | API usage limit reached | Wait or inspect account limits; do not assume retries provide unlimited access |
 | Model unavailable / 404 error | Configured model not available to the account | Review the model setting and account availability |
@@ -465,9 +543,16 @@ Authentication, role-based access, a formal data-retention policy, and a securit
 | Missing dataset | Expected CSV is absent or at the wrong path | Check `data/student_performance.csv` |
 | Relevant page links absent from an answer | Prompt instruction not followed consistently | Check the page guide and reference rule, then test relevant questions |
 
+</details>
+
+[⬆ Back to top](#contents)
+
+---
+
 ## Limitations and reproducibility
 
-### Model interpretation
+<details>
+<summary><strong>Model interpretation</strong> — click to expand</summary>
 
 - Predictions are estimates, not guaranteed academic outcomes.
 - Regression coefficients represent associations, not causal effects.
@@ -477,7 +562,10 @@ Authentication, role-based access, a formal data-retention policy, and a securit
 - Reported AUC does not establish calibrated Pass probabilities.
 - Performance on other institutions, populations, or future datasets has not been established.
 
-### Evidence boundaries
+</details>
+
+<details>
+<summary><strong>Evidence boundaries</strong> — click to expand</summary>
 
 The reported preprocessing settings and metrics provide a useful project summary, but this README does not claim an independent reproduction. The available context does not establish a complete dataset provenance record, all feature ranges, the Pass/Fail label-construction rule, dependency pins, every estimator setting, confidence intervals, external validation, or subgroup fairness results.
 
@@ -485,6 +573,10 @@ The assistant's embedded facts can become stale after changes to the dataset, mo
 
 The four Mermaid figures are explanatory diagrams based on the recorded project facts. They are not screenshots or newly generated evaluation plots. Detailed charts and interactive diagnostics are available through the documented application pages.
 
+</details>
+
 ### Licensing
 
 A software license and dataset license were not specified in the context used for this document. No license or redistribution rights are asserted here; confirm the applicable terms before reusing or redistributing the code or data.
+
+[⬆ Back to top](#contents)
