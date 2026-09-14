@@ -10,6 +10,17 @@ The project was developed for a machine-learning assignment. It combines dataset
 
 🚀 **[Try the live app](https://fahim-student-result-prediction.streamlit.app/)**
 
+## App preview
+
+### Dashboard
+![Student performance dashboard](assets/screenshots/dashboard.png)
+
+### Predict Performance
+![Student performance prediction example](assets/screenshots/prediction.png)
+
+### Learn ML Pipeline
+![Interactive machine-learning tutorial](assets/screenshots/learning.png)
+
 ## Contents
 
 - [Overview](#overview)
