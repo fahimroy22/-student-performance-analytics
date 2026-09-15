@@ -1,5 +1,6 @@
 import base64
 import html
+import time
 
 import streamlit as st
 from google import genai
@@ -8,6 +9,26 @@ from components.styles import (
     apply_global_styles,
     get_theme_colors,
 )
+
+
+# Retry helpers are defined before any page code can invoke them.
+def show_retry_button():
+    if st.button("Retry", key="retry_ai_response"):
+        st.session_state.gemini_retry_requested = True
+        st.rerun()
+
+
+def is_retryable_error(error):
+    code = getattr(error, "code", None)
+    if code is None:
+        code = getattr(error, "status_code", None)
+    if str(code) in {"429", "500", "502", "503", "504"}:
+        return True
+    error_text = str(error).lower()
+    return any(value in error_text for value in (
+        "429", "500", "502", "503", "504", "resource_exhausted",
+        "unavailable", "overloaded", "timeout", "timed out",
+    ))
 
 
 # ============================================================
@@ -831,6 +852,10 @@ if "gemini_project_chat" not in st.session_state:
     st.session_state.gemini_project_chat = []
 
 
+st.session_state.setdefault("gemini_retry_requested", False)
+st.session_state.setdefault("gemini_failed_request", None)
+
+
 # ============================================================
 # HEADER
 # ============================================================
@@ -882,6 +907,8 @@ with top_right:
 if new_chat:
 
     st.session_state.gemini_project_chat = []
+    st.session_state.gemini_failed_request = None
+    st.session_state.gemini_retry_requested = False
 
     st.rerun()
 
@@ -1292,143 +1319,91 @@ def stream_gemini_response(prompt):
 
 
 # ============================================================
-# GENERATE RESPONSE
+# GENERATE RESPONSE / RETRY
 # ============================================================
 
+failed_request = st.session_state.gemini_failed_request
+retry_requested = st.session_state.gemini_retry_requested
+st.session_state.gemini_retry_requested = False
+
+# A fresh question takes precedence over a pending retry.
 if user_question:
-
-    # --------------------------------------------------------
-    # SAVE USER MESSAGE
-    # --------------------------------------------------------
-
+    st.session_state.gemini_failed_request = None
     st.session_state.gemini_project_chat.append(
-        {
-            "role": "user",
-            "content": user_question,
-        }
+        {"role": "user", "content": user_question}
     )
+    show_user_message(user_question)
+    prompt = build_prompt(user_question)
+elif retry_requested and failed_request:
+    user_question = failed_request["question"]
+    prompt = failed_request["prompt"]
+else:
+    prompt = None
 
-
-    # --------------------------------------------------------
-    # USER MESSAGE — RIGHT
-    # --------------------------------------------------------
-
-    show_user_message(
-        user_question
-    )
-
-
-    # --------------------------------------------------------
-    # BUILD PROMPT
-    # --------------------------------------------------------
-
-    prompt = build_prompt(
-        user_question
-    )
-
-
-    # --------------------------------------------------------
-    # AI RESPONSE — LEFT
-    # --------------------------------------------------------
-
-    icon_col, response_col = st.columns(
-        [0.06, 0.94]
-    )
-
-
+if prompt is not None:
+    icon_col, response_col = st.columns([0.06, 0.94])
     with icon_col:
-
-        st.html(
-            bot_svg()
-        )
-
+        st.html(bot_svg())
 
     with response_col:
-
         thinking_placeholder = st.empty()
+        response_placeholder = st.empty()
+        answer = None
+        final_error = None
 
-        thinking_placeholder.html(
-            thinking_indicator()
-        )
-
-        stream_state = {
-            "started": False
-        }
-
-
-        try:
-
-            response_stream = (
-                stream_gemini_response(
-                    prompt
-                )
-            )
-
+        # Four total attempts, with 1, 2, and 4 second delays.
+        for attempt in range(4):
+            thinking_placeholder.html(thinking_indicator())
+            stream_state = {"started": False}
 
             def animated_stream():
-
-                for chunk in response_stream:
-
-                    if not stream_state[
-                        "started"
-                    ]:
-
+                for chunk in stream_gemini_response(prompt):
+                    if not stream_state["started"]:
                         thinking_placeholder.empty()
-
-                        stream_state[
-                            "started"
-                        ] = True
-
+                        stream_state["started"] = True
                     yield chunk
 
-
-            answer = st.write_stream(
-                animated_stream()
-            )
-
-
-            if not stream_state[
-                "started"
-            ]:
-
+            try:
+                # Replace partial output before retrying a failed stream.
+                with response_placeholder.container():
+                    answer = st.write_stream(animated_stream())
                 thinking_placeholder.empty()
+                if not answer:
+                    answer = (
+                        "I couldn't generate a text response. "
+                        "Please try asking the question another way."
+                    )
+                    response_placeholder.markdown(answer)
+                final_error = None
+                break
+            except Exception as error:
+                thinking_placeholder.empty()
+                response_placeholder.empty()
+                final_error = error
+                if attempt < 3 and is_retryable_error(error):
+                    thinking_placeholder.html(thinking_indicator())
+                    time.sleep(2 ** attempt)
+                    continue
+                break
 
-
-            if not answer:
-
-                answer = (
-                    "I couldn't generate a text response. "
-                    "Please try asking the question another way."
-                )
-
-                st.markdown(
-                    answer
-                )
-
-
-        except Exception as error:
-
-            thinking_placeholder.empty()
-
-            answer = friendly_error(
-                error
+        thinking_placeholder.empty()
+        if final_error is not None:
+            st.session_state.gemini_failed_request = {
+                "question": user_question,
+                "prompt": prompt,
+                "error": friendly_error(final_error),
+            }
+            response_placeholder.markdown(friendly_error(final_error))
+            show_retry_button()
+        else:
+            st.session_state.gemini_failed_request = None
+            st.session_state.gemini_project_chat.append(
+                {"role": "assistant", "content": answer}
             )
 
-            st.markdown(
-                answer
-            )
-
-
-    # --------------------------------------------------------
-    # SAVE AI RESPONSE
-    # --------------------------------------------------------
-
-    st.session_state.gemini_project_chat.append(
-        {
-            "role": "assistant",
-            "content": answer,
-        }
-    )
+elif failed_request:
+    show_assistant_message(failed_request["error"])
+    show_retry_button()
 
 
 # ============================================================

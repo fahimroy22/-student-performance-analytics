@@ -843,596 +843,656 @@ st.info(
 
 
 # ============================================================
-# LINEAR REGRESSION
+# RESPONSIVE SIDE-BY-SIDE MODEL PANELS
 # ============================================================
 
-section_title(
-    "trending",
-    "Linear Regression",
-)
+# Scope layout rules to this comparison only. Flex wrapping responds to
+# available content width, including when the sidebar is open.
+st.html("""
+<style>
+.st-key-model-comparison-panels [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-linear-model-panel) {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 1.5rem;
+}
+.st-key-model-comparison-panels [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-linear-model-panel) > [data-testid="stColumn"] {
+    flex: 1 1 420px !important;
+    min-width: min(100%, 420px) !important;
+    width: auto !important;
+}
+.st-key-linear-model-panel,
+.st-key-logistic-model-panel {
+    min-width: 0;
+}
+.st-key-model-comparison-panels [data-testid="stMetricLabel"] {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.st-key-model-comparison-panels [data-testid="stMetricValue"] {
+    font-size: clamp(1.35rem, 2.2vw, 2rem);
+}
+
+/* Header alignment is based on available page width, not viewport width. */
+.st-key-model-comparison-panels { container-type: inline-size; }
+@container (min-width: 880px) {
+    .st-key-linear-model-header,
+    .st-key-logistic-model-header { min-height: 280px; }
+}
+.st-key-regression-chart-heading,
+.st-key-classification-chart-heading { min-height: 64px; }
+/* Compact supporting visuals and interpretations wrap on narrow panels. */
+.st-key-regression-variance-row [data-testid="stHorizontalBlock"],
+.st-key-regression-notes-row [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+.st-key-regression-variance-row [data-testid="stColumn"] {
+    flex: 1 1 220px !important;
+    min-width: min(100%, 220px) !important;
+    width: auto !important;
+}
+.st-key-regression-notes-row [data-testid="stColumn"] {
+    flex: 1 1 150px !important;
+    min-width: min(100%, 150px) !important;
+    width: auto !important;
+}
+.st-key-regression-variance-row h4 { min-height: 3.5rem; }
+</style>
+""")
+
+with st.container(key="model-comparison-panels"):
+    linear_column, logistic_column = st.columns(2, gap="large")
+
+    with linear_column:
+        with st.container(key="linear-model-panel", border=True):
+            # ============================================================
+            # LINEAR REGRESSION
+            # ============================================================
+
+            with st.container(key="linear-model-header"):
+                section_title(
+                    "trending",
+                    "Linear Regression",
+                )
+
+
+                r1, r2, r3 = st.columns(3)
+
+                r1.metric(
+                    "MAE",
+                    "9.38",
+                )
+
+                r2.metric(
+                    "RMSE",
+                    "11.76",
+                )
+
+                r3.metric(
+                    "R²",
+                    "0.444",
+                )
+
+
+                st.caption(
+                    "Score prediction · Lower MAE/RMSE is better · Higher R² is better."
+                )
+
+
+            # ============================================================
+            # REGRESSION VISUALS
+            # ============================================================
+
+            reg1 = st.container()
+            with st.container(key="regression-variance-row"):
+                reg2, reg3 = st.columns(2, gap="small")
+
 
+            with reg1:
 
-r1, r2, r3 = st.columns(3)
+                with st.container(key="regression-chart-heading"):
+                    st.markdown(
+                        "#### Prediction Error"
+                    )
 
-r1.metric(
-    "MAE",
-    "9.38",
-)
+                regression_error_df = pd.DataFrame(
+                    {
+                        "Metric": [
+                            "MAE",
+                            "RMSE",
+                        ],
 
-r2.metric(
-    "RMSE",
-    "11.76",
-)
+                        "Value": [
+                            9.38,
+                            11.76,
+                        ],
+                    }
+                )
 
-r3.metric(
-    "R²",
-    "0.444",
-)
 
+                fig_error = px.bar(
+                    regression_error_df,
+                    x="Metric",
+                    y="Value",
+                    text="Value",
+                )
 
-st.caption(
-    "Score prediction · Lower MAE/RMSE is better · Higher R² is better."
-)
 
+                fig_error.update_traces(
+                    marker_color=accent,
+                    texttemplate="%{text:.2f}",
+                    textposition="outside",
+                )
 
-# ============================================================
-# REGRESSION VISUALS
-# ============================================================
 
-reg1, reg2, reg3 = st.columns(
-    [
-        1,
-        1,
-        1,
-    ]
-)
+                fig_error.update_layout(
+                    height=300,
 
+                    margin=dict(
+                        l=15,
+                        r=15,
+                        t=10,
+                        b=20,
+                    ),
 
-with reg1:
+                    xaxis_title="",
+                    yaxis_title="Score Points",
+                    showlegend=False,
+                )
 
-    st.markdown(
-        "#### Prediction Error"
-    )
 
-    regression_error_df = pd.DataFrame(
-        {
-            "Metric": [
-                "MAE",
-                "RMSE",
-            ],
+                style_chart(
+                    fig_error
+                )
 
-            "Value": [
-                9.38,
-                11.76,
-            ],
-        }
-    )
 
+                st.plotly_chart(
+                    fig_error,
+                    width="stretch",
+                    theme=None,
+                    config={
+                        "displayModeBar":
+                            False
+                    },
+                )
 
-    fig_error = px.bar(
-        regression_error_df,
-        x="Metric",
-        y="Value",
-        text="Value",
-    )
 
+            with reg2:
 
-    fig_error.update_traces(
-        marker_color=accent,
-        texttemplate="%{text:.2f}",
-        textposition="outside",
-    )
+                st.markdown(
+                    "#### Variance Explained"
+                )
 
 
-    fig_error.update_layout(
-        height=315,
+                fig_r2 = go.Figure(
+                    go.Indicator(
+                        mode="gauge+number",
 
-        margin=dict(
-            l=15,
-            r=15,
-            t=10,
-            b=20,
-        ),
+                        value=44.4,
 
-        xaxis_title="",
-        yaxis_title="Score Points",
-        showlegend=False,
-    )
+                        number={
+                            "suffix":
+                                "%"
+                        },
 
+                        title={
+                            "text":
+                                "R² = 0.444"
+                        },
 
-    style_chart(
-        fig_error
-    )
+                        gauge={
+                            "axis": {
+                                "range": [
+                                    0,
+                                    100,
+                                ]
+                            },
 
+                            "bar": {
+                                "color":
+                                    accent
+                            },
 
-    st.plotly_chart(
-        fig_error,
-        width="stretch",
-        theme=None,
-        config={
-            "displayModeBar":
-                False
-        },
-    )
-
-
-with reg2:
-
-    st.markdown(
-        "#### Variance Explained"
-    )
-
-
-    fig_r2 = go.Figure(
-        go.Indicator(
-            mode="gauge+number",
-
-            value=44.4,
-
-            number={
-                "suffix":
-                    "%"
-            },
+                            "bgcolor":
+                                surface,
 
-            title={
-                "text":
-                    "R² = 0.444"
-            },
+                            "bordercolor":
+                                chart_border,
+                        },
+                    )
+                )
 
-            gauge={
-                "axis": {
-                    "range": [
-                        0,
-                        100,
-                    ]
-                },
 
-                "bar": {
-                    "color":
-                        accent
-                },
+                fig_r2.update_layout(
+                    height=250,
 
-                "bgcolor":
-                    surface,
+                    margin=dict(
+                        l=25,
+                        r=25,
+                        t=35,
+                        b=20,
+                    ),
 
-                "bordercolor":
-                    chart_border,
-            },
-        )
-    )
+                    paper_bgcolor=(
+                        chart_background
+                    ),
 
+                    font=dict(
+                        color=chart_text
+                    ),
+                )
 
-    fig_r2.update_layout(
-        height=315,
-
-        margin=dict(
-            l=25,
-            r=25,
-            t=35,
-            b=20,
-        ),
-
-        paper_bgcolor=(
-            chart_background
-        ),
-
-        font=dict(
-            color=chart_text
-        ),
-    )
 
+                st.plotly_chart(
+                    fig_r2,
+                    width="stretch",
+                    theme=None,
+                    config={
+                        "displayModeBar":
+                            False
+                    },
+                )
 
-    st.plotly_chart(
-        fig_r2,
-        width="stretch",
-        theme=None,
-        config={
-            "displayModeBar":
-                False
-        },
-    )
 
+            with reg3:
 
-with reg3:
+                st.markdown(
+                    "#### Explained vs Unexplained"
+                )
 
-    st.markdown(
-        "#### Explained vs Unexplained"
-    )
 
+                variance_df = pd.DataFrame(
+                    {
+                        "Component": [
+                            "Explained",
+                            "Unexplained",
+                        ],
 
-    variance_df = pd.DataFrame(
-        {
-            "Component": [
-                "Explained",
-                "Unexplained",
-            ],
+                        "Percentage": [
+                            44.4,
+                            55.6,
+                        ],
+                    }
+                )
 
-            "Percentage": [
-                44.4,
-                55.6,
-            ],
-        }
-    )
 
+                fig_variance = px.pie(
+                    variance_df,
+                    names="Component",
+                    values="Percentage",
+                    hole=0.64,
+                )
 
-    fig_variance = px.pie(
-        variance_df,
-        names="Component",
-        values="Percentage",
-        hole=0.64,
-    )
 
+                fig_variance.update_traces(
+                    textinfo="label+percent",
+                    textposition="inside",
+                )
 
-    fig_variance.update_traces(
-        textinfo="label+percent",
-        textposition="inside",
-    )
 
+                fig_variance.update_layout(
+                    template=plotly_template,
 
-    fig_variance.update_layout(
-        template=plotly_template,
+                    height=250,
 
-        height=315,
+                    margin=dict(
+                        l=10,
+                        r=10,
+                        t=10,
+                        b=10,
+                    ),
 
-        margin=dict(
-            l=10,
-            r=10,
-            t=10,
-            b=10,
-        ),
-
-        showlegend=False,
-
-        paper_bgcolor=(
-            chart_background
-        ),
-
-        plot_bgcolor=(
-            chart_background
-        ),
-
-        font=dict(
-            color=chart_text
-        ),
-    )
-
-
-    st.plotly_chart(
-        fig_variance,
-        width="stretch",
-        theme=None,
-        config={
-            "displayModeBar":
-                False
-        },
-    )
-
-
-# ============================================================
-# REGRESSION INTERPRETATION
-# ============================================================
-
-reg_note1, reg_note2, reg_note3 = (
-    st.columns(3)
-)
-
-
-with reg_note1:
-
-    icon_card(
-        "chart",
-        "MAE = 9.38",
-        "Predictions differ from the actual score by about "
-        "9.38 points on average.",
-    )
-
-
-with reg_note2:
-
-    icon_card(
-        "chart",
-        "RMSE = 11.76",
-        "Larger prediction errors receive a stronger penalty.",
-    )
-
-
-with reg_note3:
-
-    icon_card(
-        "trending",
-        "R² = 0.444",
-        "The six predictors explain 44.4% of the observed "
-        "variation in exam scores.",
-    )
-
-
-# ============================================================
-# BALANCED LOGISTIC REGRESSION
-# ============================================================
-
-section_title(
-    "target",
-    "Balanced Logistic Regression",
-)
-
-
-classification_metric_cols = (
-    st.columns(6)
-)
-
-
-classification_metric_data = [
-    (
-        "Accuracy",
-        "72.5%",
-    ),
-    (
-        "Precision",
-        "90.6%",
-    ),
-    (
-        "Recall",
-        "71.9%",
-    ),
-    (
-        "F1",
-        "80.1%",
-    ),
-    (
-        "Balanced Acc.",
-        "73.2%",
-    ),
-    (
-        "AUC",
-        "0.814",
-    ),
-]
-
-
-for col, (
-    metric_name,
-    metric_value,
-) in zip(
-    classification_metric_cols,
-    classification_metric_data,
-):
-
-    with col:
-
-        st.metric(
-            metric_name,
-            metric_value,
-        )
-
-
-# ============================================================
-# CLASSIFICATION METRIC PROFILE
-# ============================================================
-
-cls_left, cls_right = (
-    st.columns(
-        [
-            1.4,
-            1,
-        ]
-    )
-)
-
-
-with cls_left:
-
-    section_title(
-        "chart",
-        "Classification Metric Profile",
-    )
-
-
-    classification_metric_df = (
-        pd.DataFrame(
-            {
-                "Metric": [
+                    showlegend=False,
+
+                    paper_bgcolor=(
+                        chart_background
+                    ),
+
+                    plot_bgcolor=(
+                        chart_background
+                    ),
+
+                    font=dict(
+                        color=chart_text
+                    ),
+                )
+
+
+                st.plotly_chart(
+                    fig_variance,
+                    width="stretch",
+                    theme=None,
+                    config={
+                        "displayModeBar":
+                            False
+                    },
+                )
+
+
+            # ============================================================
+            # REGRESSION INTERPRETATION
+            # ============================================================
+
+            with st.container(key="regression-notes-row"):
+                reg_note1, reg_note2, reg_note3 = st.columns(3, gap="small")
+
+
+            with reg_note1:
+
+                icon_card(
+                    "chart",
+                    "MAE = 9.38",
+                    "Predictions differ from the actual score by about "
+                    "9.38 points on average.",
+                )
+
+
+            with reg_note2:
+
+                icon_card(
+                    "chart",
+                    "RMSE = 11.76",
+                    "Larger prediction errors receive a stronger penalty.",
+                )
+
+
+            with reg_note3:
+
+                icon_card(
+                    "trending",
+                    "R² = 0.444",
+                    "The six predictors explain 44.4% of the observed "
+                    "variation in exam scores.",
+                )
+
+
+
+    with logistic_column:
+        with st.container(key="logistic-model-panel", border=True):
+            # ============================================================
+            # BALANCED LOGISTIC REGRESSION
+            # ============================================================
+
+            with st.container(key="logistic-model-header"):
+                section_title(
+                    "target",
+                    "Balanced Logistic Regression",
+                )
+
+
+                classification_metric_cols = [
+                    *st.columns(3),
+                    *st.columns(3),
+                ]
+
+
+                classification_metric_data = [
+                    (
+                        "Accuracy",
+                        "72.5%",
+                    ),
+                    (
+                        "Precision",
+                        "90.6%",
+                    ),
+                    (
+                        "Recall",
+                        "71.9%",
+                    ),
+                    (
+                        "F1",
+                        "80.1%",
+                    ),
+                    (
+                        "Balanced Acc.",
+                        "73.2%",
+                    ),
+                    (
+                        "AUC",
+                        "0.814",
+                    ),
+                ]
+
+
+                for col, (
+                    metric_name,
+                    metric_value,
+                ) in zip(
+                    classification_metric_cols,
+                    classification_metric_data,
+                ):
+
+                    with col:
+
+                        st.metric(
+                            metric_name,
+                            metric_value,
+                        )
+
+
+            # ============================================================
+            # CLASSIFICATION METRIC PROFILE
+            # ============================================================
+
+            cls_left, cls_right = (st.container() for _ in range(2))
+
+
+            with cls_left:
+
+                with st.container(key="classification-chart-heading"):
+                    section_title(
+                        "chart",
+                        "Classification Metric Profile",
+                    )
+
+
+                classification_metric_df = (
+                    pd.DataFrame(
+                        {
+                            "Metric": [
+                                "Accuracy",
+                                "Precision",
+                                "Recall",
+                                "F1",
+                                "Balanced Accuracy",
+                                "AUC",
+                            ],
+
+                            "Score": [
+                                72.5,
+                                90.6,
+                                71.9,
+                                80.1,
+                                73.2,
+                                81.4,
+                            ],
+                        }
+                    )
+                )
+
+
+                fig_cls_metrics = px.bar(
+                    classification_metric_df,
+                    x="Score",
+                    y="Metric",
+                    orientation="h",
+                    text="Score",
+                )
+
+
+                fig_cls_metrics.update_traces(
+                    marker_color=accent,
+                    texttemplate="%{text:.1f}%",
+                    textposition="outside",
+                )
+
+
+                fig_cls_metrics.update_layout(
+                    height=300,
+
+                    margin=dict(
+                        l=20,
+                        r=65,
+                        t=10,
+                        b=20,
+                    ),
+
+                    xaxis=dict(
+                        title="Score (%)",
+                        range=[
+                            0,
+                            100,
+                        ],
+                        ticksuffix="%",
+                    ),
+
+                    yaxis_title="",
+
+                    showlegend=False,
+                )
+
+
+                style_chart(
+                    fig_cls_metrics
+                )
+
+
+                st.plotly_chart(
+                    fig_cls_metrics,
+                    width="stretch",
+                    theme=None,
+                    config={
+                        "displayModeBar":
+                            False
+                    },
+                )
+
+
+            with cls_right:
+
+                section_title(
+                    "chart",
+                    "Metric Balance",
+                )
+
+
+                radar_labels = [
                     "Accuracy",
                     "Precision",
                     "Recall",
                     "F1",
-                    "Balanced Accuracy",
+                    "Balanced Acc.",
                     "AUC",
-                ],
+                ]
 
-                "Score": [
+
+                radar_values = [
                     72.5,
                     90.6,
                     71.9,
                     80.1,
                     73.2,
                     81.4,
-                ],
-            }
-        )
-    )
+                ]
 
 
-    fig_cls_metrics = px.bar(
-        classification_metric_df,
-        x="Score",
-        y="Metric",
-        orientation="h",
-        text="Score",
-    )
+                radar_labels_closed = (
+                    radar_labels
+                    + [
+                        radar_labels[0]
+                    ]
+                )
 
 
-    fig_cls_metrics.update_traces(
-        marker_color=accent,
-        texttemplate="%{text:.1f}%",
-        textposition="outside",
-    )
+                radar_values_closed = (
+                    radar_values
+                    + [
+                        radar_values[0]
+                    ]
+                )
 
 
-    fig_cls_metrics.update_layout(
-        height=390,
-
-        margin=dict(
-            l=20,
-            r=65,
-            t=10,
-            b=20,
-        ),
-
-        xaxis=dict(
-            title="Score (%)",
-            range=[
-                0,
-                100,
-            ],
-            ticksuffix="%",
-        ),
-
-        yaxis_title="",
-
-        showlegend=False,
-    )
+                fig_radar = go.Figure()
 
 
-    style_chart(
-        fig_cls_metrics
-    )
+                fig_radar.add_trace(
+                    go.Scatterpolar(
+                        r=radar_values_closed,
+                        theta=radar_labels_closed,
+                        fill="toself",
+
+                        name=(
+                            "Balanced Logistic"
+                        ),
+
+                        line=dict(
+                            color=accent
+                        ),
+                    )
+                )
 
 
-    st.plotly_chart(
-        fig_cls_metrics,
-        width="stretch",
-        theme=None,
-        config={
-            "displayModeBar":
-                False
-        },
-    )
+                fig_radar.update_layout(
+                    template=plotly_template,
+
+                    height=420,
+
+                    margin=dict(
+                        l=45,
+                        r=45,
+                        t=25,
+                        b=25,
+                    ),
+
+                    polar=dict(
+                        bgcolor=(
+                            chart_background
+                        ),
+
+                        radialaxis=dict(
+                            visible=True,
+
+                            range=[
+                                0,
+                                100,
+                            ],
+
+                            ticksuffix="%",
+
+                            gridcolor=(
+                                chart_border
+                            ),
+                        ),
+
+                        angularaxis=dict(
+                            gridcolor=(
+                                chart_border
+                            ),
+                        ),
+                    ),
+
+                    showlegend=False,
+
+                    paper_bgcolor=(
+                        chart_background
+                    ),
+
+                    font=dict(
+                        color=chart_text
+                    ),
+                )
 
 
-with cls_right:
+                st.plotly_chart(
+                    fig_radar,
+                    width="stretch",
+                    theme=None,
+                    config={
+                        "displayModeBar":
+                            False
+                    },
+                )
 
-    section_title(
-        "chart",
-        "Metric Balance",
-    )
-
-
-    radar_labels = [
-        "Accuracy",
-        "Precision",
-        "Recall",
-        "F1",
-        "Balanced Acc.",
-        "AUC",
-    ]
-
-
-    radar_values = [
-        72.5,
-        90.6,
-        71.9,
-        80.1,
-        73.2,
-        81.4,
-    ]
-
-
-    radar_labels_closed = (
-        radar_labels
-        + [
-            radar_labels[0]
-        ]
-    )
-
-
-    radar_values_closed = (
-        radar_values
-        + [
-            radar_values[0]
-        ]
-    )
-
-
-    fig_radar = go.Figure()
-
-
-    fig_radar.add_trace(
-        go.Scatterpolar(
-            r=radar_values_closed,
-            theta=radar_labels_closed,
-            fill="toself",
-
-            name=(
-                "Balanced Logistic"
-            ),
-
-            line=dict(
-                color=accent
-            ),
-        )
-    )
-
-
-    fig_radar.update_layout(
-        template=plotly_template,
-
-        height=390,
-
-        margin=dict(
-            l=45,
-            r=45,
-            t=25,
-            b=25,
-        ),
-
-        polar=dict(
-            bgcolor=(
-                chart_background
-            ),
-
-            radialaxis=dict(
-                visible=True,
-
-                range=[
-                    0,
-                    100,
-                ],
-
-                ticksuffix="%",
-
-                gridcolor=(
-                    chart_border
-                ),
-            ),
-
-            angularaxis=dict(
-                gridcolor=(
-                    chart_border
-                ),
-            ),
-        ),
-
-        showlegend=False,
-
-        paper_bgcolor=(
-            chart_background
-        ),
-
-        font=dict(
-            color=chart_text
-        ),
-    )
-
-
-    st.plotly_chart(
-        fig_radar,
-        width="stretch",
-        theme=None,
-        config={
-            "displayModeBar":
-                False
-        },
-    )
 
 
 # ============================================================

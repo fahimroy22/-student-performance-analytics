@@ -4,6 +4,9 @@
 # ============================================================
 
 import random
+import hashlib
+import pickle
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -23,6 +26,9 @@ from components.icons import (
     page_title,
     section_title,
 )
+
+from sklearn.metrics import mean_absolute_error, balanced_accuracy_score, roc_auc_score
+from sklearn.model_selection import train_test_split
 
 from core.prediction import predict_student_performance
 
@@ -67,9 +73,6 @@ negative_color = "#C86B6B"
 # CONSTANTS
 # ============================================================
 
-MODEL_MAE = 9.38
-CLASSIFICATION_BALANCED_ACCURACY = 73.2
-CLASSIFICATION_AUC = 0.814
 
 FEATURES = [
     "previous_exam_score",
@@ -131,9 +134,6 @@ st.markdown(
         margin-bottom: -0.15rem;
     }}
 
-    div[data-testid="stNumberInput"] label {{
-        display: none;
-    }}
 
     div[data-testid="stNumberInput"] input {{
         font-weight: 650;
@@ -341,6 +341,60 @@ linear_model, logistic_model = (
 
 
 # ============================================================
+# EVALUATION METRICS — SAME SPLITS AS THE MODEL DETAIL PAGES
+# ============================================================
+
+DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "student_performance.csv"
+
+
+@st.cache_data
+def load_evaluation_data(path, modified_ns, size_bytes):
+    # File metadata invalidates cached data after the CSV is replaced.
+    return pd.read_csv(path)
+
+
+@st.cache_data
+def calculate_prediction_metrics(data, model_signature, _linear, _logistic):
+    # The signature fingerprints both fitted pipelines; underscore arguments
+    # avoid Streamlit's custom-object hashing while retaining cache invalidation.
+    X = data[FEATURES].copy()
+    y_reg = data["exam_score"].copy()
+    _, X_test_reg, _, y_test_reg = train_test_split(
+        X, y_reg, test_size=0.20, random_state=42,
+    )
+    mae = float(mean_absolute_error(y_test_reg, _linear.predict(X_test_reg)))
+
+    y_cls = data["pass_status"].astype(str)
+    _, X_test_cls, _, y_test_cls = train_test_split(
+        X, y_cls, test_size=0.20, random_state=42, stratify=y_cls,
+    )
+    predicted_classes = _logistic.predict(X_test_cls)
+    classes = list(_logistic.named_steps["model"].classes_)
+    pass_probability = _logistic.predict_proba(X_test_cls)[:, classes.index("Pass")]
+    balanced_accuracy = float(
+        balanced_accuracy_score(y_test_cls, predicted_classes) * 100
+    )
+    auc = float(roc_auc_score(y_test_cls.eq("Pass").astype(int), pass_probability))
+    return mae, balanced_accuracy, auc
+
+
+evaluation_file_stat = DATA_PATH.stat()
+evaluation_data = load_evaluation_data(
+    str(DATA_PATH), evaluation_file_stat.st_mtime_ns, evaluation_file_stat.st_size,
+)
+evaluation_model_signature = hashlib.sha256(
+    pickle.dumps((linear_model, logistic_model), protocol=pickle.HIGHEST_PROTOCOL)
+).hexdigest()
+(
+    MODEL_MAE,
+    CLASSIFICATION_BALANCED_ACCURACY,
+    CLASSIFICATION_AUC,
+) = calculate_prediction_metrics(
+    evaluation_data, evaluation_model_signature, linear_model, logistic_model,
+)
+
+
+# ============================================================
 # CHART STYLE
 # ============================================================
 
@@ -532,6 +586,10 @@ def format_change(
     value,
     suffix="",
 ):
+
+    # Determine color from the displayed precision, avoiding signed zero.
+    if float(f"{value:.1f}") == 0:
+        return ("neutral-change", f"0.0{suffix}")
 
     if value > 0:
 
@@ -1185,6 +1243,17 @@ with profile_panel:
     )
 
 
+    fig_profile.update_layout(
+        margin=dict(l=80, r=80, t=35, b=40),
+        polar=dict(angularaxis=dict(
+            tickmode="array",
+            tickvals=radar_labels,
+            ticktext=["Previous<br>Exam", "GPA", "Attendance",
+                      "Assignments", "Study<br>Hours", "Practice<br>Tests"],
+            tickfont=dict(size=11),
+        )),
+    )
+
     st.plotly_chart(
         fig_profile,
         width="stretch",
@@ -1459,203 +1528,99 @@ if (
     )
 
 
-    gauge1, gauge2 = (
-        st.columns(2)
-    )
+    score_panel, probability_panel = st.columns(2, gap="large")
 
-
-    # --------------------------------------------------------
-    # SCORE GAUGE
-    # --------------------------------------------------------
-
-    with gauge1:
-
-        fig_score_gauge = (
-            go.Figure(
-                go.Indicator(
-                    mode="gauge+number",
-
-                    value=predicted_score,
-
-                    number={
-                        "suffix":
-                            " / 100",
-
-                        "font": {
-                            "size":
-                                36
-                        },
-                    },
-
-                    title={
-                        "text":
-                            "Predicted Exam Score"
-                    },
-
-                    gauge={
-                        "axis": {
-                            "range":
-                                [
-                                    0,
-                                    100,
-                                ]
-                        },
-
-                        "bar": {
-                            "color":
-                                accent,
-
-                            "thickness":
-                                0.22,
-                        },
-
-                        "bgcolor":
-                            surface,
-
-                        "bordercolor":
-                            border,
-                    },
-                )
+    with score_panel:
+        with st.container(border=True):
+            st.markdown("#### Score explorer")
+            st.caption("Compare the predicted score with a target you choose.")
+            score_target = st.slider(
+                "Your target score", min_value=0, max_value=100, value=70,
+                step=1, key="dashboard_score_target",
+                help="This is a comparison target. It does not change either model's prediction.",
             )
-        )
+            score_gap = predicted_score - score_target
+            gap_css, gap_text = format_change(score_gap, " points")
+            st.caption(f"Predicted: {predicted_score:.1f} / 100 · Target: {score_target} · Difference: {gap_text}")
 
-
-        fig_score_gauge.update_layout(
-            height=215,
-
-            margin=dict(
-                l=30,
-                r=30,
-                t=35,
-                b=5,
-            ),
-
-            paper_bgcolor=(
-                background
-            ),
-
-            font=dict(
-                color=text_color
-            ),
-        )
-
-
-        st.plotly_chart(
-            fig_score_gauge,
-            width="stretch",
-            theme=None,
-
-            config={
-                "displayModeBar":
-                    False
-            },
-        )
-
-
-    # --------------------------------------------------------
-    # PASS PROBABILITY GAUGE
-    # --------------------------------------------------------
-
-    with gauge2:
-
-        fig_probability_gauge = (
-            go.Figure(
-                go.Indicator(
-                    mode="gauge+number",
-
-                    value=(
-                        probability_percent
-                    ),
-
-                    number={
-                        "suffix":
-                            "%",
-
-                        "font": {
-                            "size":
-                                36
-                        },
-                    },
-
-                    title={
-                        "text":
-                            "Pass Probability"
-                    },
-
-                    gauge={
-                        "axis": {
-                            "range":
-                                [
-                                    0,
-                                    100,
-                                ]
-                        },
-
-                        "bar": {
-                            "color":
-                                accent,
-
-                            "thickness":
-                                0.22,
-                        },
-
-                        "bgcolor":
-                            surface,
-
-                        "bordercolor":
-                            border,
-
-                        "threshold": {
-                            "line": {
-                                "color":
-                                    muted,
-
-                                "width":
-                                    3,
-                            },
-
-                            "thickness":
-                                0.70,
-
-                            "value":
-                                50,
-                        },
-                    },
-                )
+            fig_score_explorer = go.Figure()
+            fig_score_explorer.add_trace(go.Scatter(
+                x=[0, 100], y=[0, 0], mode="lines",
+                line=dict(color=border, width=12),
+                hoverinfo="skip", showlegend=False,
+            ))
+            fig_score_explorer.add_trace(go.Scatter(
+                x=[predicted_score, score_target], y=[0, 0], mode="lines",
+                line=dict(color=accent, width=5),
+                hoverinfo="skip", showlegend=False,
+            ))
+            fig_score_explorer.add_trace(go.Scatter(
+                x=[predicted_score], y=[0], mode="markers+text",
+                marker=dict(size=20, color=accent, line=dict(color=surface, width=3)),
+                text=[f"Prediction {predicted_score:.1f}"], textposition="top center",
+                name="Prediction", cliponaxis=False,
+                hovertemplate="Predicted exam score: %{x:.2f} / 100<extra>Linear Regression</extra>",
+            ))
+            fig_score_explorer.add_trace(go.Scatter(
+                x=[score_target], y=[0], mode="markers+text",
+                marker=dict(size=16, symbol="diamond", color=muted,
+                            line=dict(color=surface, width=2)),
+                text=[f"Target {score_target}"], textposition="bottom center",
+                name="Your target", cliponaxis=False,
+                hovertemplate="Your target: %{x:.0f} / 100<extra>Comparison only</extra>",
+            ))
+            fig_score_explorer.update_layout(
+                height=235, margin=dict(l=65, r=65, t=40, b=45),
+                showlegend=False, dragmode=False,
+                xaxis=dict(range=[-3, 103], tickvals=[0, 20, 40, 60, 80, 100],
+                           title="Exam score", fixedrange=True),
+                yaxis=dict(range=[-0.65, 0.65], visible=False, fixedrange=True),
+                hoverlabel=dict(bgcolor=surface, font_color=text_color),
             )
-        )
+            style_chart(fig_score_explorer)
+            st.plotly_chart(
+                fig_score_explorer, width="stretch", theme=None,
+                config={"displayModeBar": False, "responsive": True},
+                key="prediction_score_explorer",
+            )
+            st.caption("Move the slider to explore the gap. Hover over either marker for details.")
 
-
-        fig_probability_gauge.update_layout(
-            height=215,
-
-            margin=dict(
-                l=30,
-                r=30,
-                t=35,
-                b=5,
-            ),
-
-            paper_bgcolor=(
-                background
-            ),
-
-            font=dict(
-                color=text_color
-            ),
-        )
-
-
-        st.plotly_chart(
-            fig_probability_gauge,
-            width="stretch",
-            theme=None,
-
-            config={
-                "displayModeBar":
-                    False
-            },
-        )
+    with probability_panel:
+        with st.container(border=True):
+            st.markdown("#### Outcome probabilities")
+            st.caption("Explore the model's estimated probability for each outcome.")
+            fig_outcome_probability = go.Figure(go.Pie(
+                labels=["Pass", "Fail"],
+                values=[probability_percent, 100 - probability_percent],
+                hole=0.76, sort=False, direction="clockwise", rotation=0,
+                marker=dict(colors=[accent, negative_color],
+                            line=dict(color=surface, width=3)),
+                textinfo="none",
+                hovertemplate="%{label}: %{value:.2f}%<extra>Model estimate</extra>",
+            ))
+            fig_outcome_probability.update_layout(
+                template=plotly_template,
+                height=300, margin=dict(l=20, r=20, t=15, b=25),
+                paper_bgcolor=background, font=dict(color=text_color),
+                annotations=[dict(
+                    text=f"<b>{probability_percent:.1f}%</b><br>Pass probability",
+                    x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False,
+                    font=dict(size=20, color=text_color),
+                )],
+                legend=dict(orientation="h", x=0.5, xanchor="center", y=-0.06,
+                            itemclick=False, itemdoubleclick=False),
+                hoverlabel=dict(bgcolor=surface, font_color=text_color),
+            )
+            st.plotly_chart(
+                fig_outcome_probability, width="stretch", theme=None,
+                config={"displayModeBar": False, "responsive": True},
+                key="prediction_outcome_probability",
+            )
+            st.caption(
+                f"Pass {probability_percent:.1f}% · Fail {100 - probability_percent:.1f}% · "
+                f"Predicted outcome: {predicted_status}"
+            )
+            st.caption("Hover over each segment for details. Probabilities are model estimates, not guarantees.")
 
 
     # ========================================================
@@ -1885,7 +1850,7 @@ if (
 
         section_title(
             "trending",
-            "Expected Score Range",
+            "MAE-Based Error Guide",
         )
 
 
@@ -2016,9 +1981,9 @@ if (
 
 
         st.caption(
-            f"MAE-based interval: "
+            f"Prediction ± average absolute error (clipped to 0–100): "
             f"{lower_score:.1f}–{upper_score:.1f} · "
-            f"not a statistical confidence interval."
+            f"illustrative only, not a validated prediction interval."
         )
 
 
@@ -2156,6 +2121,19 @@ if (
         )
 
 
+        contribution_min = min(0.0, float(linear_plot["Contribution"].min()))
+        contribution_max = max(0.0, float(linear_plot["Contribution"].max()))
+        contribution_span = contribution_max - contribution_min
+        contribution_padding = contribution_span * 0.25 if contribution_span else 0.1
+        fig_linear_influence.update_xaxes(
+            range=[contribution_min - contribution_padding,
+                   contribution_max + contribution_padding],
+            automargin=True,
+        )
+        fig_linear_influence.update_yaxes(automargin=True)
+        fig_linear_influence.update_layout(margin=dict(l=25, r=45, t=10, b=45))
+        fig_linear_influence.update_traces(cliponaxis=False)
+
         st.plotly_chart(
             fig_linear_influence,
             width="stretch",
@@ -2274,6 +2252,19 @@ if (
             fig_logistic_influence
         )
 
+
+        contribution_min = min(0.0, float(logistic_plot["Contribution"].min()))
+        contribution_max = max(0.0, float(logistic_plot["Contribution"].max()))
+        contribution_span = contribution_max - contribution_min
+        contribution_padding = contribution_span * 0.25 if contribution_span else 0.1
+        fig_logistic_influence.update_xaxes(
+            range=[contribution_min - contribution_padding,
+                   contribution_max + contribution_padding],
+            automargin=True,
+        )
+        fig_logistic_influence.update_yaxes(automargin=True)
+        fig_logistic_influence.update_layout(margin=dict(l=25, r=45, t=10, b=45))
+        fig_logistic_influence.update_traces(cliponaxis=False)
 
         st.plotly_chart(
             fig_logistic_influence,
@@ -3136,19 +3127,19 @@ if (
 
         detail1.metric(
             "Linear Model MAE",
-            "9.38 points",
+            f"{MODEL_MAE:.2f} points",
         )
 
 
         detail2.metric(
             "Balanced Accuracy",
-            "73.2%",
+            f"{CLASSIFICATION_BALANCED_ACCURACY:.1f}%",
         )
 
 
         detail3.metric(
             "Classification AUC",
-            "0.814",
+            f"{CLASSIFICATION_AUC:.3f}",
         )
 
 
